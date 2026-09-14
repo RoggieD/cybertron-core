@@ -49,7 +49,9 @@ function stringValue(value: unknown): string | null {
 
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && !!item.trim());
+  return value.filter(
+    (item): item is string => typeof item === "string" && !!item.trim(),
+  );
 }
 
 function numberValue(value: unknown): number | null {
@@ -74,10 +76,7 @@ function entityId(
 }
 
 function agentLabel(event: CoreEvent): string | null {
-  return (
-    stringValue(event.metadata?.agent_name) ??
-    entityId(event, "agent")
-  );
+  return stringValue(event.metadata?.agent_name) ?? entityId(event, "agent");
 }
 
 function modelLabel(event: CoreEvent): string | null {
@@ -256,7 +255,10 @@ export default function ProcessingPage() {
             memoryScopes: scopes.length
               ? scopes
               : fallbackScope && fallbackScope !== "none"
-                ? fallbackScope.split(",").map((value) => value.trim()).filter(Boolean)
+                ? fallbackScope
+                    .split(",")
+                    .map((value) => value.trim())
+                    .filter(Boolean)
                 : [],
             memoryKinds: kinds,
             memorySources: sources,
@@ -280,7 +282,8 @@ export default function ProcessingPage() {
   );
 
   const currentOperation = useMemo(
-    () => (lastEvent ? describeEvent(lastEvent) : "Awaiting orchestration activity"),
+    () =>
+      lastEvent ? describeEvent(lastEvent) : "Awaiting orchestration activity",
     [lastEvent],
   );
 
@@ -295,41 +298,16 @@ export default function ProcessingPage() {
         </p>
       </div>
 
-      <div className="processing-status-grid">
-        <article>
-          <span>EVENT BUS</span>
-          <strong className={connected ? "online" : "warning"}>
-            {connected ? "CONNECTED" : "OFFLINE"}
-          </strong>
-        </article>
-        <article>
-          <span>CURRENT STAGE</span>
-          <strong>{stage}</strong>
-        </article>
-        <article>
-          <span>ACTIVE AGENT</span>
-          <strong title={activeAgent}>{activeAgent}</strong>
-        </article>
-        <article>
-          <span>ACTIVE TOOL</span>
-          <strong title={activeTool}>{activeTool}</strong>
-        </article>
-        <article>
-          <span>MEMORY</span>
-          <strong title={memoryAction}>{memoryAction}</strong>
-        </article>
-        <article>
-          <span>ACTIVE MODEL</span>
-          <strong title={activeModel}>{activeModel}</strong>
-        </article>
-        <article>
-          <span>TRACE ID</span>
-          <strong className="trace-id" title={traceId ?? undefined}>{traceShort}</strong>
-        </article>
-        <article>
-          <span>TRACE EVENTS</span>
-          <strong>{eventCount}</strong>
-        </article>
+      <div className="core-processing-graph" style={{ marginBottom: 12 }}>
+        <Suspense
+          fallback={
+            <div className="core-graph-loading">
+              INITIALIZING COGNITION MAP…
+            </div>
+          }
+        >
+          <CognitionGraph event={lastEvent} connected={connected} />
+        </Suspense>
       </div>
 
       <div className={`processing-operation processing-operation-${stage.toLowerCase()}`}>
@@ -372,7 +350,9 @@ export default function ProcessingPage() {
 
           <article className={provenance.tools.length ? "active" : ""}>
             <span>TOOLS / LIVE DATA</span>
-            <strong title={joinValues(provenance.tools)}>{joinValues(provenance.tools)}</strong>
+            <strong title={joinValues(provenance.tools)}>
+              {joinValues(provenance.tools)}
+            </strong>
             <small>Verified runtime and external evidence path.</small>
           </article>
 
@@ -405,9 +385,11 @@ export default function ProcessingPage() {
           <div>
             <span>EVIDENCE CHANNELS</span>
             <strong>
-              {[provenance.userInput ? "USER" : null,
+              {[
+                provenance.userInput ? "USER" : null,
                 provenance.memoryCount !== null ? "MEMORY" : null,
-                provenance.tools.length ? "TOOLS" : null]
+                provenance.tools.length ? "TOOLS" : null,
+              ]
                 .filter(Boolean)
                 .join(" + ") || "NONE"}
             </strong>
@@ -415,43 +397,68 @@ export default function ProcessingPage() {
         </div>
       </section>
 
-      <div className="core-processing-layout">
-        <div className="core-processing-graph">
-          <Suspense
-            fallback={
-              <div className="core-graph-loading">
-                INITIALIZING COGNITION MAP…
-              </div>
-            }
-          >
-            <CognitionGraph event={lastEvent} connected={connected} />
-          </Suspense>
+      <div className="processing-status-grid">
+        <article>
+          <span>EVENT BUS</span>
+          <strong className={connected ? "online" : "warning"}>
+            {connected ? "CONNECTED" : "OFFLINE"}
+          </strong>
+        </article>
+        <article>
+          <span>CURRENT STAGE</span>
+          <strong>{stage}</strong>
+        </article>
+        <article>
+          <span>ACTIVE AGENT</span>
+          <strong title={activeAgent}>{activeAgent}</strong>
+        </article>
+        <article>
+          <span>ACTIVE TOOL</span>
+          <strong title={activeTool}>{activeTool}</strong>
+        </article>
+        <article>
+          <span>MEMORY</span>
+          <strong title={memoryAction}>{memoryAction}</strong>
+        </article>
+        <article>
+          <span>ACTIVE MODEL</span>
+          <strong title={activeModel}>{activeModel}</strong>
+        </article>
+        <article>
+          <span>TRACE ID</span>
+          <strong className="trace-id" title={traceId ?? undefined}>
+            {traceShort}
+          </strong>
+        </article>
+        <article>
+          <span>TRACE EVENTS</span>
+          <strong>{eventCount}</strong>
+        </article>
+      </div>
+
+      <aside className="processing-event-trail" style={{ width: "100%" }}>
+        <div className="processing-event-trail-header">
+          <span>LIVE EVENT TRAIL</span>
+          <strong>{eventTrail.length}/10</strong>
         </div>
 
-        <aside className="processing-event-trail">
-          <div className="processing-event-trail-header">
-            <span>LIVE EVENT TRAIL</span>
-            <strong>{eventTrail.length}/10</strong>
-          </div>
-
-          <div className="processing-event-list">
-            {eventTrail.length === 0 ? (
-              <div className="processing-event-empty">
-                Awaiting orchestration activity…
+        <div className="processing-event-list">
+          {eventTrail.length === 0 ? (
+            <div className="processing-event-empty">
+              Awaiting orchestration activity…
+            </div>
+          ) : (
+            [...eventTrail].reverse().map((event) => (
+              <div className="processing-event-item" key={event.event_id}>
+                <span>{describeEvent(event)}</span>
+                <small>
+                  {event.event_type} · {new Date(event.timestamp).toLocaleTimeString()}
+                </small>
               </div>
-            ) : (
-              [...eventTrail].reverse().map((event) => (
-                <div className="processing-event-item" key={event.event_id}>
-                  <span>{describeEvent(event)}</span>
-                  <small>
-                    {event.event_type} · {new Date(event.timestamp).toLocaleTimeString()}
-                  </small>
-                </div>
-              ))
-            )}
-          </div>
-        </aside>
-      </div>
+            ))
+          )}
+        </div>
+      </aside>
     </section>
   );
 }
