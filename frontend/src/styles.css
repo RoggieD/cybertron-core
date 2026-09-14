@@ -1054,3 +1054,102 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+/* Rolling telemetry trends */
+
+.trend-panel {
+  width: min(1180px, 94vw);
+  margin: 18px auto;
+  padding: 18px;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  background: rgba(3, 14, 20, 0.76);
+}
+
+.trend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.trend-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trend-header span,
+.trend-card span {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+}
+
+.trend-header small {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  opacity: 0.5;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.trend-card {
+  min-height: 125px;
+  padding: 12px;
+  border: 1px solid rgba(0, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.trend-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.trend-card strong {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 62px;
+  overflow: visible;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.sparkline-empty {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  opacity: 0.4;
+}
+
+@media (max-width: 900px) {
+  .trend-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .trend-grid {
+    grid-template-columns: 1fr;
+  }
+}

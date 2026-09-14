@@ -29,6 +29,59 @@ type TelemetryState =
   | "ELEVATED"
   | "WARNING";
 
+type TelemetrySample = {
+  timestamp: number;
+  cpu: number;
+  memory: number;
+  disk: number;
+  serviceLatency: number;
+};
+
+function Sparkline({
+  values,
+  maxValue = 100
+}: {
+  values: number[];
+  maxValue?: number;
+}) {
+  if (values.length < 2) {
+    return <div className="sparkline-empty">ACQUIRING DATA</div>;
+  }
+
+  const width = 240;
+  const height = 56;
+
+  const effectiveMax = Math.max(
+    maxValue,
+    ...values,
+    1
+  );
+
+  const points = values
+    .map((value, index) => {
+      const x =
+        (index / (values.length - 1)) * width;
+
+      const y =
+        height -
+        Math.min(value / effectiveMax, 1) * height;
+
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline points={points} />
+    </svg>
+  );
+}
+
 function getTelemetryState(
   overview: StatusOverview | null,
   error: boolean
@@ -101,6 +154,8 @@ export default function App() {
   const [manualCheckBusy, setManualCheckBusy] = useState(false);
   const [lastManualCheck, setLastManualCheck] =
     useState<Date | null>(null);
+  const [telemetryHistory, setTelemetryHistory] =
+    useState<TelemetrySample[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -116,6 +171,33 @@ export default function App() {
           setOverview(data);
           setServices(serviceData.services);
           setOverviewError(false);
+
+          const latencyValues =
+            serviceData.services
+              .map((service) => service.latency_ms)
+              .filter(
+                (value): value is number =>
+                  typeof value === "number"
+              );
+
+          const averageLatency =
+            latencyValues.length > 0
+              ? latencyValues.reduce(
+                  (sum, value) => sum + value,
+                  0
+                ) / latencyValues.length
+              : 0;
+
+          setTelemetryHistory((current) => [
+            ...current,
+            {
+              timestamp: Date.now(),
+              cpu: data.system.cpu.usage_percent,
+              memory: data.system.memory.usage_percent,
+              disk: data.system.disk.usage_percent,
+              serviceLatency: averageLatency
+            }
+          ].slice(-24));
 
           setSelectedService((current) => {
             if (!current) {
@@ -546,6 +628,92 @@ export default function App() {
               {overview?.network.listeners ?? "--"}
             </strong>
             <small>ACTIVE SOCKETS</small>
+          </article>
+        </div>
+      </section>
+
+      <section className="trend-panel">
+        <div className="trend-header">
+          <div>
+            <span>ROLLING TELEMETRY</span>
+            <strong>LAST ~2 MINUTES</strong>
+          </div>
+
+          <small>
+            {telemetryHistory.length}/24 SAMPLES
+          </small>
+        </div>
+
+        <div className="trend-grid">
+          <article className="trend-card">
+            <div>
+              <span>CPU</span>
+              <strong>
+                {overview
+                  ? `${overview.system.cpu.usage_percent}%`
+                  : "--"}
+              </strong>
+            </div>
+
+            <Sparkline
+              values={telemetryHistory.map(
+                (sample) => sample.cpu
+              )}
+            />
+          </article>
+
+          <article className="trend-card">
+            <div>
+              <span>MEMORY</span>
+              <strong>
+                {overview
+                  ? `${overview.system.memory.usage_percent}%`
+                  : "--"}
+              </strong>
+            </div>
+
+            <Sparkline
+              values={telemetryHistory.map(
+                (sample) => sample.memory
+              )}
+            />
+          </article>
+
+          <article className="trend-card">
+            <div>
+              <span>DISK</span>
+              <strong>
+                {overview
+                  ? `${overview.system.disk.usage_percent}%`
+                  : "--"}
+              </strong>
+            </div>
+
+            <Sparkline
+              values={telemetryHistory.map(
+                (sample) => sample.disk
+              )}
+            />
+          </article>
+
+          <article className="trend-card">
+            <div>
+              <span>AVG SERVICE LATENCY</span>
+              <strong>
+                {telemetryHistory.length
+                  ? `${telemetryHistory[
+                      telemetryHistory.length - 1
+                    ].serviceLatency.toFixed(1)} ms`
+                  : "--"}
+              </strong>
+            </div>
+
+            <Sparkline
+              values={telemetryHistory.map(
+                (sample) => sample.serviceLatency
+              )}
+              maxValue={500}
+            />
           </article>
         </div>
       </section>
