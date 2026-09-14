@@ -35,6 +35,11 @@ type VoiceState =
   | "ERROR";
 type TelemetryState = "HEALTHY" | "ELEVATED" | "WARNING";
 
+const VAD_SPEECH_THRESHOLD = 0.018;
+const VAD_SILENCE_MS = 1100;
+const VAD_NO_SPEECH_TIMEOUT_MS = 8000;
+const VAD_MAX_RECORDING_MS = 30000;
+
 function getTelemetryState(
   overview: StatusOverview | null,
   error: boolean,
@@ -164,6 +169,28 @@ export default function DashboardPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadFrameRef = useRef<number | null>(null);
+  const speechDetectedRef = useRef(false);
+  const silenceStartedRef = useRef<number | null>(null);
+  const recordingStartedRef = useRef<number | null>(null);
+
+  function stopVoiceActivityDetection() {
+    if (vadFrameRef.current !== null) {
+      window.cancelAnimationFrame(vadFrameRef.current);
+      vadFrameRef.current = null;
+    }
+
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
+
+    const context = audioContextRef.current;
+    audioContextRef.current = null;
+    if (context && context.state !== "closed") {
+      void context.close();
+    }
+  }
 
   useEffect(() => {
     setMicSupported(microphoneSupported());
@@ -181,6 +208,7 @@ export default function DashboardPage() {
       });
 
     return () => {
+      stopVoiceActivityDetection();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       recorderRef.current = null;
@@ -399,10 +427,71 @@ export default function DashboardPage() {
   }
 
   function stopListening() {
+    stopVoiceActivityDetection();
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") {
       recorder.stop();
     }
+  }
+
+  function startVoiceActivityDetection(stream: MediaStream) {
+    stopVoiceActivityDetection();
+
+    const context = new AudioContext();
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.35;
+    source.connect(analyser);
+
+    audioContextRef.current = context;
+    analyserRef.current = analyser;
+    speechDetectedRef.current = false;
+    silenceStartedRef.current = null;
+    recordingStartedRef.current = performance.now();
+
+    const samples = new Float32Array(analyser.fftSize);
+
+    const monitor = () => {
+      const recorder = recorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        stopVoiceActivityDetection();
+        return;
+      }
+
+      analyser.getFloatTimeDomainData(samples);
+      let sumSquares = 0;
+      for (const sample of samples) {
+        sumSquares += sample * sample;
+      }
+      const rms = Math.sqrt(sumSquares / samples.length);
+      const now = performance.now();
+      const startedAt = recordingStartedRef.current ?? now;
+
+      if (rms >= VAD_SPEECH_THRESHOLD) {
+        speechDetectedRef.current = true;
+        silenceStartedRef.current = null;
+      } else if (speechDetectedRef.current) {
+        if (silenceStartedRef.current === null) {
+          silenceStartedRef.current = now;
+        } else if (now - silenceStartedRef.current >= VAD_SILENCE_MS) {
+          stopListening();
+          return;
+        }
+      } else if (now - startedAt >= VAD_NO_SPEECH_TIMEOUT_MS) {
+        stopListening();
+        return;
+      }
+
+      if (now - startedAt >= VAD_MAX_RECORDING_MS) {
+        stopListening();
+        return;
+      }
+
+      vadFrameRef.current = window.requestAnimationFrame(monitor);
+    };
+
+    vadFrameRef.current = window.requestAnimationFrame(monitor);
   }
 
   async function startListening() {
@@ -415,6 +504,7 @@ export default function DashboardPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
+      speechDetectedRef.current = false;
 
       const mimeType = preferredRecordingMimeType();
       const recorder = mimeType
@@ -428,6 +518,7 @@ export default function DashboardPage() {
       };
 
       recorder.onerror = () => {
+        stopVoiceActivityDetection();
         stream.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
         recorderRef.current = null;
@@ -435,14 +526,23 @@ export default function DashboardPage() {
       };
 
       recorder.onstop = () => {
+        stopVoiceActivityDetection();
         const chunks = audioChunksRef.current;
         const recordedType = recorder.mimeType || mimeType || "audio/webm";
         const blob = new Blob(chunks, { type: recordedType });
+        const heardSpeech = speechDetectedRef.current;
 
         stream.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
         recorderRef.current = null;
         audioChunksRef.current = [];
+        recordingStartedRef.current = null;
+        silenceStartedRef.current = null;
+
+        if (!heardSpeech) {
+          setVoiceState("READY");
+          return;
+        }
 
         if (!blob.size) {
           setVoiceState("ERROR");
@@ -468,8 +568,10 @@ export default function DashboardPage() {
       };
 
       recorder.start();
+      startVoiceActivityDetection(stream);
       setVoiceState("LISTENING");
     } catch {
+      stopVoiceActivityDetection();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       recorderRef.current = null;
@@ -556,12 +658,12 @@ export default function DashboardPage() {
                 : !sttReady
                   ? "Local Whisper STT is not ready"
                   : voiceState === "LISTENING"
-                    ? "Stop recording and transcribe"
-                    : "Record a command with local Whisper"
+                    ? "Listening with automatic silence detection; click to stop manually"
+                    : "Record a command with local Whisper and automatic silence detection"
             }
           >
             {voiceState === "LISTENING"
-              ? "■ STOP & TRANSCRIBE"
+              ? "● LISTENING • AUTO-STOP"
               : voiceState === "TRANSCRIBING"
                 ? "… TRANSCRIBING"
                 : "🎙 LISTEN"}
