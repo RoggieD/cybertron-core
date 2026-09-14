@@ -13,6 +13,11 @@ PUBLIC_BIND_ADDRESSES = {
     "::0",
 }
 
+LOOPBACK_ADDRESSES = {
+    "127.0.0.1",
+    "::1",
+}
+
 
 def _severity_rank(value: str) -> int:
     return {
@@ -46,6 +51,20 @@ def _score_findings(findings: list[dict]) -> tuple[dict, int, str]:
         posture = "baseline"
 
     return severity_counts, score, posture
+
+
+def _endpoint_address(endpoint: str) -> str:
+    """Return the address portion of an address:port endpoint string."""
+    if endpoint.startswith("[") and "]:" in endpoint:
+        return endpoint[1:].rsplit("]: ", 1)[0]
+    if endpoint.count(":") == 1:
+        return endpoint.split(":", 1)[0]
+    # Current listener snapshots use plain IPv6 address text followed by :port.
+    return endpoint.rsplit(":", 1)[0]
+
+
+def _is_loopback_endpoint(endpoint: str) -> bool:
+    return _endpoint_address(endpoint) in LOOPBACK_ADDRESSES
 
 
 async def security_snapshot() -> dict:
@@ -238,35 +257,45 @@ async def security_snapshot() -> dict:
             }
         )
 
+    loopback_new: list[str] = []
+    reviewable_new: list[str] = []
+
     if baseline_comparison.get("has_previous_baseline"):
         new_endpoints = baseline_comparison.get("new_listener_endpoints", [])
         removed_endpoints = baseline_comparison.get("removed_listener_endpoints", [])
-        posture_changed = bool(baseline_comparison.get("posture_changed"))
-        score_delta = int(baseline_comparison.get("attention_score_delta") or 0)
+        new_public = set(
+            baseline_comparison.get("new_public_listener_endpoints", [])
+        )
 
         non_public_new = [
-            endpoint
-            for endpoint in new_endpoints
-            if endpoint
-            not in baseline_comparison.get("new_public_listener_endpoints", [])
+            endpoint for endpoint in new_endpoints if endpoint not in new_public
+        ]
+        loopback_new = [
+            endpoint for endpoint in non_public_new if _is_loopback_endpoint(endpoint)
+        ]
+        reviewable_new = [
+            endpoint for endpoint in non_public_new if endpoint not in loopback_new
         ]
 
-        if non_public_new or posture_changed or score_delta > 0:
+        # Only new non-loopback listener exposure is promoted to a security
+        # finding here. Loopback churn, transient CPU/load changes, process
+        # churn, and owner-resolution changes remain forensic context.
+        if reviewable_new:
             findings.append(
                 {
                     "id": "security-relevant-change",
                     "severity": "medium",
                     "category": "change-detection",
-                    "title": "Security-relevant host state changed",
-                    "evidence_count": len(non_public_new),
+                    "title": "New non-loopback listening endpoint detected",
+                    "evidence_count": len(reviewable_new),
                     "evidence": {
-                        "new_non_public_listener_endpoints": non_public_new,
-                        "posture_changed": posture_changed,
-                        "attention_score_delta": score_delta,
+                        "new_non_loopback_listener_endpoints": reviewable_new,
                     },
                     "interpretation": (
-                        "C.O.R.E. detected an exposure or posture change worth review. "
-                        "This is an observation and does not prove compromise."
+                        "C.O.R.E. detected a newly listening endpoint that is not "
+                        "limited to loopback and is not an all-interface listener already "
+                        "handled by expected-listener policy. Validate that the exposure "
+                        "is expected."
                     ),
                 }
             )
@@ -308,13 +337,15 @@ async def security_snapshot() -> dict:
             "new_process_names": baseline_comparison.get("new_process_names", []),
             "removed_process_names": baseline_comparison.get("removed_process_names", []),
             "listener_owner_changes": baseline_comparison.get("listener_owner_changes", []),
+            "new_loopback_listener_endpoints": loopback_new,
+            "transient_score_and_posture_changes_are_context_only": True,
         },
         "limitations": [
             "Local host observation only.",
             "No external network scanning was performed.",
             "No vulnerability database lookup was performed.",
             "The expected listener baseline is learned from first observation and is not yet an administrator-approved allowlist.",
-            "Process churn alone is retained as context and does not raise a change finding.",
+            "Process churn, loopback listener churn, and transient load changes are retained as context and do not raise change findings by themselves.",
             "Unresolved listener ownership is a visibility limitation, not proof of suspicious activity.",
             "Changes from baseline are observations and do not prove compromise.",
             "Each security.snapshot call records defensive telemetry for later comparison.",
