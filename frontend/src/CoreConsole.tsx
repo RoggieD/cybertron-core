@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
-import VoiceAgent3D from "./components/VoiceAgent3D";
 import DashboardPage from "./pages/DashboardPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import MemoryPage from "./pages/MemoryPage";
@@ -65,8 +64,6 @@ export default function CoreConsole() {
   return (
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
-      <VoiceAgent3D active={page === "dashboard"} />
-
       {page === "dashboard" && <DashboardPage />}
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}

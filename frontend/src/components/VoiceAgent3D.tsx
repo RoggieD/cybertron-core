@@ -12,6 +12,10 @@ type VoiceVisualState =
 
 type VoiceAgent3DProps = {
   active?: boolean;
+  activeAgent?: string;
+  activeTool?: string;
+  activeModel?: string;
+  orchestrationState?: string;
 };
 
 type WidgetPosition = {
@@ -94,7 +98,18 @@ function storedPosition(): WidgetPosition {
   }
 }
 
-export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
+function displayValue(value: string | undefined, fallback: string) {
+  const normalized = value?.trim();
+  return normalized && normalized !== "NONE" ? normalized : fallback;
+}
+
+export default function VoiceAgent3D({
+  active = true,
+  activeAgent,
+  activeTool,
+  activeModel,
+  orchestrationState = "IDLE",
+}: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
   const dragRef = useRef<{
@@ -104,6 +119,9 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
   } | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceVisualState>("OFFLINE");
   const [position, setPosition] = useState<WidgetPosition>(() => storedPosition());
+  const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
+    orchestrationState,
+  );
 
   useEffect(() => {
     if (!active) return;
@@ -253,17 +271,18 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
       particlesMaterial.color.lerp(primary, 0.08);
       key.color.lerp(secondary, 0.08);
 
-      const pulseRate = state === "SPEAKING" ? 7.5 : state === "LISTENING" ? 4.2 : 2.1;
-      const pulse = 1 + Math.sin(elapsed * pulseRate) * 0.055 * palette.energy;
+      const operationEnergy = operationActive ? 1.28 : 1;
+      const pulseRate = state === "SPEAKING" ? 7.5 : state === "LISTENING" ? 4.2 : operationActive ? 3.2 : 2.1;
+      const pulse = 1 + Math.sin(elapsed * pulseRate) * 0.055 * palette.energy * operationEnergy;
       core.scale.setScalar(pulse);
       inner.scale.setScalar(0.96 + Math.sin(elapsed * pulseRate + 1.2) * 0.07 * palette.energy);
 
       core.rotation.x += 0.0028 * palette.energy;
-      core.rotation.y += 0.0045 * palette.energy;
+      core.rotation.y += 0.0045 * palette.energy * operationEnergy;
       inner.rotation.x -= 0.0032 * palette.energy;
       inner.rotation.z += 0.0025 * palette.energy;
-      ringOne.rotation.z += 0.006 * palette.energy;
-      ringTwo.rotation.x -= 0.004 * palette.energy;
+      ringOne.rotation.z += 0.006 * palette.energy * operationEnergy;
+      ringTwo.rotation.x -= 0.004 * palette.energy * operationEnergy;
       particles.rotation.y -= 0.0018 * palette.energy;
       particles.rotation.x = Math.sin(elapsed * 0.22) * 0.12;
 
@@ -301,7 +320,7 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [active]);
+  }, [active, operationActive]);
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || window.innerWidth <= 900) return;
@@ -351,7 +370,7 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
 
   return (
     <aside
-      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()}`}
+      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""}`}
       style={{ left: position.x, top: position.y }}
     >
       <div
@@ -365,6 +384,24 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
       >
         <span>VOICE AGENT</span>
         <strong>{voiceState}</strong>
+      </div>
+      <div className="voice-agent-operation" aria-live="polite">
+        <div>
+          <span>AGENT</span>
+          <strong>{displayValue(activeAgent, "STANDBY")}</strong>
+        </div>
+        <div>
+          <span>TOOL</span>
+          <strong>{displayValue(activeTool, "—")}</strong>
+        </div>
+        <div>
+          <span>MODEL</span>
+          <strong>{displayValue(activeModel, "—")}</strong>
+        </div>
+        <div>
+          <span>STATE</span>
+          <strong>{orchestrationState.replaceAll("_", " ")}</strong>
+        </div>
       </div>
       <div ref={mountRef} className="voice-agent-canvas" aria-hidden="true" />
       <div className="voice-agent-caption">

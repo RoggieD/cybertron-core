@@ -13,6 +13,7 @@ import {
   connectCoreWebSocket,
   type CoreEvent,
 } from "../api/websocket";
+import VoiceAgent3D from "../components/VoiceAgent3D";
 
 import "../styles.css";
 import "../voice.css";
@@ -619,6 +620,12 @@ export default function DashboardPage() {
 
   return (
     <main className="core-shell">
+      <VoiceAgent3D
+        activeAgent={activeAgent}
+        activeTool={activeTool}
+        activeModel={activeModel}
+        orchestrationState={displayedReactorState}
+      />
       <section className="header">
         <p className="eyebrow">CYBERTRON SYSTEMS</p>
         <h1>
