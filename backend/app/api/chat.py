@@ -32,9 +32,14 @@ def build_messages(
     agent_instructions: str,
     tool_id: str | None = None,
     tool_result: dict | None = None,
+    *,
+    session_id: str | None = None,
+    trace_id: str | None = None,
 ) -> list[dict]:
     memory_context = format_memory_context(
-        message
+        message,
+        session_id=session_id,
+        trace_id=trace_id,
     )
 
     return [
@@ -52,11 +57,7 @@ def build_messages(
                 "Verified tool results override model assumptions. "
                 "Never change counts, states, names, or measurements supplied "
                 "by a tool. "
-                + (
-                    "\n\n" + memory_context
-                    if memory_context
-                    else ""
-                )
+                + ("\n\n" + memory_context if memory_context else "")
                 + (
                     "\n\n" + format_tool_context(tool_id, tool_result)
                     if tool_id and tool_result is not None
@@ -64,10 +65,7 @@ def build_messages(
                 )
             ),
         },
-        {
-            "role": "user",
-            "content": message,
-        },
+        {"role": "user", "content": message},
     ]
 
 
@@ -89,7 +87,6 @@ async def chat(request: ChatRequest) -> dict:
                 status="complete",
             )
         )
-
         await event_bus.publish(
             CoreEvent(
                 event_type="router.started",
@@ -100,7 +97,6 @@ async def chat(request: ChatRequest) -> dict:
                 status="running",
             )
         )
-
         await event_bus.publish(
             CoreEvent(
                 event_type="agent.selected",
@@ -112,7 +108,6 @@ async def chat(request: ChatRequest) -> dict:
                 metadata={"agent_name": agent.name},
             )
         )
-
         await event_bus.publish(
             CoreEvent(
                 event_type="agent.started",
@@ -125,15 +120,8 @@ async def chat(request: ChatRequest) -> dict:
         )
 
         tool_id, tool_result = await run_agent_tool(agent, request.message)
-        verified_output = render_verified_tool_result(
-            tool_id,
-            tool_result,
-        )
-
-        verified_only = should_return_verified_only(
-            request.message,
-            tool_id,
-        )
+        verified_output = render_verified_tool_result(tool_id, tool_result)
+        verified_only = should_return_verified_only(request.message, tool_id)
 
         if tool_id:
             await event_bus.publish(
@@ -146,7 +134,6 @@ async def chat(request: ChatRequest) -> dict:
                     status="running",
                 )
             )
-
             await event_bus.publish(
                 CoreEvent(
                     event_type="tool.completed",
@@ -170,7 +157,6 @@ async def chat(request: ChatRequest) -> dict:
                     status="complete",
                 )
             )
-
             await event_bus.publish(
                 CoreEvent(
                     event_type="response.generated",
@@ -181,7 +167,6 @@ async def chat(request: ChatRequest) -> dict:
                     status="complete",
                 )
             )
-
             return {
                 "session_id": session_id,
                 "trace_id": trace_id,
@@ -213,12 +198,12 @@ async def chat(request: ChatRequest) -> dict:
                 agent.instructions,
                 tool_id,
                 tool_result,
+                session_id=session_id,
+                trace_id=trace_id,
             ),
         )
-
         message = result.get("message", {})
         model_response = message.get("content", "")
-
         response_text = (
             f"{verified_output}\n\nANALYSIS\n{model_response}"
             if verified_output
@@ -240,7 +225,6 @@ async def chat(request: ChatRequest) -> dict:
                 },
             )
         )
-
         await event_bus.publish(
             CoreEvent(
                 event_type="agent.completed",
@@ -251,7 +235,6 @@ async def chat(request: ChatRequest) -> dict:
                 status="complete",
             )
         )
-
         await event_bus.publish(
             CoreEvent(
                 event_type="response.generated",
@@ -289,7 +272,6 @@ async def chat(request: ChatRequest) -> dict:
                 metadata={"error": str(exc)},
             )
         )
-
         raise HTTPException(
             status_code=503,
             detail=f"Chat inference failed: {exc}",
@@ -297,9 +279,7 @@ async def chat(request: ChatRequest) -> dict:
 
 
 @router.post("/stream")
-async def chat_stream(
-    request: ChatRequest,
-) -> StreamingResponse:
+async def chat_stream(request: ChatRequest) -> StreamingResponse:
     session_id = request.session_id or str(uuid4())
     trace_id = str(uuid4())
     model = model_service.active_model
@@ -322,7 +302,6 @@ async def chat_stream(
             status=status,
             metadata=metadata or {},
         )
-
         await event_bus.publish(event)
         return event
 
@@ -334,14 +313,12 @@ async def chat_stream(
                 target={"type": "core", "id": "cybertron"},
                 status="complete",
             )
-
             await publish(
                 "router.started",
                 actor={"type": "core", "id": "cybertron"},
                 target={"type": "router", "id": "agent-router"},
                 status="running",
             )
-
             await publish(
                 "agent.selected",
                 actor={"type": "router", "id": "agent-router"},
@@ -349,7 +326,6 @@ async def chat_stream(
                 status="complete",
                 metadata={"agent_name": agent.name},
             )
-
             await publish(
                 "agent.started",
                 actor={"type": "agent", "id": agent.id},
@@ -358,15 +334,8 @@ async def chat_stream(
             )
 
             tool_id, tool_result = await run_agent_tool(agent, request.message)
-            verified_output = render_verified_tool_result(
-                tool_id,
-                tool_result,
-            )
-
-            verified_only = should_return_verified_only(
-                request.message,
-                tool_id,
-            )
+            verified_output = render_verified_tool_result(tool_id, tool_result)
+            verified_only = should_return_verified_only(request.message, tool_id)
 
             if tool_id:
                 await publish(
@@ -375,7 +344,6 @@ async def chat_stream(
                     target={"type": "tool", "id": tool_id},
                     status="running",
                 )
-
                 await publish(
                     "tool.completed",
                     actor={"type": "tool", "id": tool_id},
@@ -407,21 +375,18 @@ async def chat_stream(
                         "content": verified_output,
                     }
                 ) + "\n"
-
                 await publish(
                     "agent.completed",
                     actor={"type": "agent", "id": agent.id},
                     target={"type": "core", "id": "cybertron"},
                     status="complete",
                 )
-
                 await publish(
                     "response.generated",
                     actor={"type": "core", "id": "cybertron"},
                     target={"type": "user", "id": "local"},
                     status="complete",
                 )
-
                 return
 
             await publish(
@@ -430,7 +395,6 @@ async def chat_stream(
                 target={"type": "model", "id": model},
                 status="running",
             )
-
             yield json.dumps(
                 {
                     "event": "model.request_started",
@@ -451,6 +415,8 @@ async def chat_stream(
                     agent.instructions,
                     tool_id,
                     tool_result,
+                    session_id=session_id,
+                    trace_id=trace_id,
                 ),
             ):
                 message = chunk.get("message", {})
@@ -463,7 +429,6 @@ async def chat_stream(
                         target={"type": "agent", "id": agent.id},
                         status="streaming",
                     )
-
                     yield json.dumps(
                         {
                             "event": "model.token",
@@ -482,7 +447,6 @@ async def chat_stream(
                         "prompt_eval_count": chunk.get("prompt_eval_count"),
                         "eval_count": chunk.get("eval_count"),
                     }
-
                     await publish(
                         "model.request_completed",
                         actor={"type": "model", "id": model},
@@ -490,21 +454,18 @@ async def chat_stream(
                         status="complete",
                         metadata=telemetry,
                     )
-
                     await publish(
                         "agent.completed",
                         actor={"type": "agent", "id": agent.id},
                         target={"type": "core", "id": "cybertron"},
                         status="complete",
                     )
-
                     await publish(
                         "response.generated",
                         actor={"type": "core", "id": "cybertron"},
                         target={"type": "user", "id": "local"},
                         status="complete",
                     )
-
                     yield json.dumps(
                         {
                             "event": "model.request_completed",
@@ -525,7 +486,6 @@ async def chat_stream(
                 status="error",
                 metadata={"error": str(exc)},
             )
-
             yield json.dumps(
                 {
                     "event": "model.error",
