@@ -53,6 +53,8 @@ async def collect_sample() -> dict:
         else 0.0
     )
 
+    gpu = system.get("gpu") or {}
+
     return {
         "timestamp": datetime.now(
             timezone.utc
@@ -60,6 +62,11 @@ async def collect_sample() -> dict:
         "cpu_percent": system["cpu"]["usage_percent"],
         "memory_percent": system["memory"]["usage_percent"],
         "disk_percent": system["disk"]["usage_percent"],
+        "gpu_percent": (
+            gpu.get("usage_percent")
+            if gpu.get("available")
+            else None
+        ),
         "docker_running": running_containers,
         "docker_total": docker.get(
             "count",
