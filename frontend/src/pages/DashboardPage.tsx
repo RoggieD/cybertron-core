@@ -36,8 +36,10 @@ type VoiceState =
 type TelemetryState = "HEALTHY" | "ELEVATED" | "WARNING";
 
 const VAD_SPEECH_THRESHOLD = 0.018;
-const VAD_SILENCE_MS = 1100;
-const VAD_NO_SPEECH_TIMEOUT_MS = 8000;
+const VAD_STARTUP_GRACE_MS = 2000;
+const VAD_SPEECH_CONFIRM_MS = 250;
+const VAD_SILENCE_MS = 1600;
+const VAD_NO_SPEECH_TIMEOUT_MS = 12000;
 const VAD_MAX_RECORDING_MS = 30000;
 
 function getTelemetryState(
@@ -173,6 +175,7 @@ export default function DashboardPage() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const vadFrameRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
+  const speechCandidateStartedRef = useRef<number | null>(null);
   const silenceStartedRef = useRef<number | null>(null);
   const recordingStartedRef = useRef<number | null>(null);
 
@@ -447,6 +450,7 @@ export default function DashboardPage() {
     audioContextRef.current = context;
     analyserRef.current = analyser;
     speechDetectedRef.current = false;
+    speechCandidateStartedRef.current = null;
     silenceStartedRef.current = null;
     recordingStartedRef.current = performance.now();
 
@@ -467,23 +471,40 @@ export default function DashboardPage() {
       const rms = Math.sqrt(sumSquares / samples.length);
       const now = performance.now();
       const startedAt = recordingStartedRef.current ?? now;
+      const elapsed = now - startedAt;
 
       if (rms >= VAD_SPEECH_THRESHOLD) {
-        speechDetectedRef.current = true;
-        silenceStartedRef.current = null;
-      } else if (speechDetectedRef.current) {
-        if (silenceStartedRef.current === null) {
-          silenceStartedRef.current = now;
-        } else if (now - silenceStartedRef.current >= VAD_SILENCE_MS) {
+        if (speechDetectedRef.current) {
+          silenceStartedRef.current = null;
+        } else if (speechCandidateStartedRef.current === null) {
+          speechCandidateStartedRef.current = now;
+        } else if (
+          now - speechCandidateStartedRef.current >= VAD_SPEECH_CONFIRM_MS
+        ) {
+          speechDetectedRef.current = true;
+          speechCandidateStartedRef.current = null;
+          silenceStartedRef.current = null;
+        }
+      } else {
+        speechCandidateStartedRef.current = null;
+
+        if (speechDetectedRef.current && elapsed >= VAD_STARTUP_GRACE_MS) {
+          if (silenceStartedRef.current === null) {
+            silenceStartedRef.current = now;
+          } else if (now - silenceStartedRef.current >= VAD_SILENCE_MS) {
+            stopListening();
+            return;
+          }
+        } else if (
+          !speechDetectedRef.current &&
+          elapsed >= VAD_NO_SPEECH_TIMEOUT_MS
+        ) {
           stopListening();
           return;
         }
-      } else if (now - startedAt >= VAD_NO_SPEECH_TIMEOUT_MS) {
-        stopListening();
-        return;
       }
 
-      if (now - startedAt >= VAD_MAX_RECORDING_MS) {
+      if (elapsed >= VAD_MAX_RECORDING_MS) {
         stopListening();
         return;
       }
@@ -505,6 +526,7 @@ export default function DashboardPage() {
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
       speechDetectedRef.current = false;
+      speechCandidateStartedRef.current = null;
 
       const mimeType = preferredRecordingMimeType();
       const recorder = mimeType
@@ -537,6 +559,7 @@ export default function DashboardPage() {
         recorderRef.current = null;
         audioChunksRef.current = [];
         recordingStartedRef.current = null;
+        speechCandidateStartedRef.current = null;
         silenceStartedRef.current = null;
 
         if (!heardSpeech) {
