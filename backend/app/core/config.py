@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     kokoro_container_port: int = 8880
     kokoro_model: str = "kokoro"
     kokoro_voice: str = "af_heart"
+    whisper_base_url: str = "http://127.0.0.1:9001/v1"
+    whisper_api_key: str = ""
+    whisper_model: str = "whisper-1"
     database_url: str = "sqlite:///./data/cybertron.db"
 
     model_config = SettingsConfigDict(
