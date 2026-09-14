@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
 type VoiceVisualState =
@@ -12,6 +13,16 @@ type VoiceVisualState =
 type VoiceAgent3DProps = {
   active?: boolean;
 };
+
+type WidgetPosition = {
+  x: number;
+  y: number;
+};
+
+const WIDGET_WIDTH = 270;
+const WIDGET_HEIGHT = 330;
+const WIDGET_MARGIN = 12;
+const WIDGET_STORAGE_KEY = "cybertron.voice-agent.position";
 
 const VOICE_STATES: VoiceVisualState[] = [
   "READY",
@@ -50,10 +61,49 @@ function paletteForState(state: VoiceVisualState) {
   }
 }
 
+function clampPosition(position: WidgetPosition): WidgetPosition {
+  const maxX = Math.max(WIDGET_MARGIN, window.innerWidth - WIDGET_WIDTH - WIDGET_MARGIN);
+  const maxY = Math.max(WIDGET_MARGIN, window.innerHeight - WIDGET_HEIGHT - WIDGET_MARGIN);
+
+  return {
+    x: Math.min(Math.max(position.x, WIDGET_MARGIN), maxX),
+    y: Math.min(Math.max(position.y, WIDGET_MARGIN), maxY),
+  };
+}
+
+function defaultPosition(): WidgetPosition {
+  return clampPosition({
+    x: window.innerWidth - WIDGET_WIDTH - 22,
+    y: window.innerHeight - WIDGET_HEIGHT - 22,
+  });
+}
+
+function storedPosition(): WidgetPosition {
+  try {
+    const raw = window.localStorage.getItem(WIDGET_STORAGE_KEY);
+    if (!raw) return defaultPosition();
+
+    const parsed = JSON.parse(raw) as Partial<WidgetPosition>;
+    if (typeof parsed.x !== "number" || typeof parsed.y !== "number") {
+      return defaultPosition();
+    }
+
+    return clampPosition({ x: parsed.x, y: parsed.y });
+  } catch {
+    return defaultPosition();
+  }
+}
+
 export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
+  const dragRef = useRef<{
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceVisualState>("OFFLINE");
+  const [position, setPosition] = useState<WidgetPosition>(() => storedPosition());
 
   useEffect(() => {
     if (!active) return;
@@ -76,6 +126,16 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
 
     return () => observer.disconnect();
   }, [active]);
+
+  useEffect(() => {
+    const onResize = () => setPosition((current) => clampPosition(current));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(position));
+  }, [position]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -243,11 +303,66 @@ export default function VoiceAgent3D({ active = true }: VoiceAgent3DProps) {
     };
   }, [active]);
 
+  function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || window.innerWidth <= 900) return;
+
+    const widget = event.currentTarget.closest<HTMLElement>(".voice-agent-3d");
+    if (!widget) return;
+
+    const bounds = widget.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - bounds.left,
+      offsetY: event.clientY - bounds.top,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add("voice-agent-dragging");
+  }
+
+  function continueDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    setPosition(
+      clampPosition({
+        x: event.clientX - drag.offsetX,
+        y: event.clientY - drag.offsetY,
+      }),
+    );
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    document.body.classList.remove("voice-agent-dragging");
+  }
+
+  function resetPosition() {
+    setPosition(defaultPosition());
+  }
+
   if (!active) return null;
 
   return (
-    <aside className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()}`}>
-      <div className="voice-agent-heading">
+    <aside
+      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()}`}
+      style={{ left: position.x, top: position.y }}
+    >
+      <div
+        className="voice-agent-heading voice-agent-drag-handle"
+        onPointerDown={beginDrag}
+        onPointerMove={continueDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDoubleClick={resetPosition}
+        title="Drag to move • double-click to reset position"
+      >
         <span>VOICE AGENT</span>
         <strong>{voiceState}</strong>
       </div>
