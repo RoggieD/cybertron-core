@@ -32,21 +32,27 @@ export default function TraceReplayPanel({
   const [error, setError] = useState<string | null>(null);
   const [selectedTrace, setSelectedTrace] = useState<string | null>(null);
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       setTraces(await getTraceSummaries(12));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load traces");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
   useEffect(() => {
     void refresh();
-  }, []);
+
+    const interval = window.setInterval(() => {
+      if (!replaying) void refresh(true);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [replaying]);
 
   async function openTrace(traceId: string, replay: boolean) {
     setSelectedTrace(traceId);
@@ -55,6 +61,7 @@ export default function TraceReplayPanel({
       const trace = await getTraceDetail(traceId);
       if (replay) onReplay(trace);
       else onLoad(trace);
+      void refresh(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load trace");
     }
@@ -95,7 +102,7 @@ export default function TraceReplayPanel({
                   <strong>{formatTime(trace.started_at)}</strong>
                 </div>
                 <div>
-                  <span>EVENTS</span>
+                  <span>FORENSIC EVENTS</span>
                   <strong>{trace.event_count}</strong>
                 </div>
                 <div>
