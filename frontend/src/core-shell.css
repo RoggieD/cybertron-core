@@ -100,59 +100,6 @@
   font-size: 0.72rem;
 }
 
-body[data-core-page="dashboard"] .telemetry-panel,
-body[data-core-page="dashboard"] .trend-panel,
-body[data-core-page="dashboard"] .service-health-panel,
-body[data-core-page="dashboard"] .incident-analytics-panel,
-body[data-core-page="dashboard"] .incident-panel,
-body[data-core-page="dashboard"] .memory-approval-panel {
-  display: none;
-}
-
-body[data-core-page="processing"] .core-shell {
-  display: none;
-}
-
-body[data-core-page="systems"] .reactor-panel,
-body[data-core-page="systems"] .conversation-panel,
-body[data-core-page="systems"] .service-health-panel,
-body[data-core-page="systems"] .incident-analytics-panel,
-body[data-core-page="systems"] .incident-panel,
-body[data-core-page="systems"] .memory-approval-panel {
-  display: none;
-}
-
-body[data-core-page="services"] .reactor-panel,
-body[data-core-page="services"] .conversation-panel,
-body[data-core-page="services"] .telemetry-panel,
-body[data-core-page="services"] .trend-panel,
-body[data-core-page="services"] .incident-analytics-panel,
-body[data-core-page="services"] .incident-panel,
-body[data-core-page="services"] .memory-approval-panel {
-  display: none;
-}
-
-body[data-core-page="incidents"] .reactor-panel,
-body[data-core-page="incidents"] .conversation-panel,
-body[data-core-page="incidents"] .telemetry-panel,
-body[data-core-page="incidents"] .trend-panel,
-body[data-core-page="incidents"] .service-health-panel,
-body[data-core-page="incidents"] .memory-approval-panel {
-  display: none;
-}
-
-body[data-core-page="memory"] .reactor-panel,
-body[data-core-page="memory"] .conversation-panel,
-body[data-core-page="memory"] .telemetry-panel,
-body[data-core-page="memory"] .trend-panel,
-body[data-core-page="memory"] .service-health-panel,
-body[data-core-page="memory"] .incident-analytics-panel,
-body[data-core-page="memory"] .incident-panel,
-body[data-core-page="memory"] .status-grid,
-body[data-core-page="memory"] footer {
-  display: none;
-}
-
 body:not([data-core-page="dashboard"]):not([data-core-page="processing"]) .core-shell {
   padding-top: 28px;
 }
