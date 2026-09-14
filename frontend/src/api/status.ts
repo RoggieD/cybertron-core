@@ -13,6 +13,15 @@ export type StatusOverview = {
     disk: {
       usage_percent: number;
     };
+    gpu: {
+      available: boolean;
+      name?: string | null;
+      usage_percent?: number | null;
+      memory_used_mb?: number | null;
+      memory_total_mb?: number | null;
+      memory_usage_percent?: number | null;
+      temperature_c?: number | null;
+    };
     uptime_seconds: number;
   };
 
@@ -98,6 +107,7 @@ export type TelemetryHistorySample = {
   cpu_percent: number;
   memory_percent: number;
   disk_percent: number;
+  gpu_percent?: number | null;
   docker_running: number;
   docker_total: number;
   services_reachable: number;
