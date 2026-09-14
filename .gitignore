@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime
+*.log
+data/
+tmp/
+
+# Secrets
+*.pem
+*.key
+*.crt
+secrets/
+
+# TypeScript build metadata
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
