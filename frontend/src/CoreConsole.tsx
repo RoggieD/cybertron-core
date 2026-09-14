@@ -6,6 +6,7 @@ import CoreNavigation, {
 } from "./components/CoreNavigation";
 import DashboardPage from "./pages/DashboardPage";
 import ProcessingPage from "./pages/ProcessingPage";
+import SystemsPage from "./pages/SystemsPage";
 import "./core-shell.css";
 
 function pageFromPath(pathname: string): CorePage {
@@ -58,13 +59,17 @@ export default function CoreConsole() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  const usesLegacyApp =
+    page === "services" || page === "incidents" || page === "memory";
+
   return (
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
 
       {page === "dashboard" && <DashboardPage />}
       {page === "processing" && <ProcessingPage />}
-      {page !== "dashboard" && page !== "processing" && <App />}
+      {page === "systems" && <SystemsPage />}
+      {usesLegacyApp && <App />}
     </>
   );
 }
