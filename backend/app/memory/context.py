@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import re
 
+from backend.app.events.bus import event_bus
+from backend.app.events.schema import CoreEvent
 from backend.app.memory import (
     MemoryPolicy,
     MemoryStore,
@@ -32,6 +35,44 @@ def _tokens(value: str) -> set[str]:
     }
 
 
+def _publish_memory_event(
+    event_type: str,
+    *,
+    status: str,
+    metadata: dict | None = None,
+) -> None:
+    """Publish memory lifecycle telemetry without blocking retrieval.
+
+    Context retrieval is intentionally synchronous today because it reads the
+    local SQLite memory store. Chat requests execute inside an asyncio event
+    loop, so scheduling the event keeps the retrieval API backward compatible
+    while still exposing honest memory activity to the C.O.R.E. event bus.
+    """
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    loop.create_task(
+        event_bus.publish(
+            CoreEvent(
+                event_type=event_type,
+                actor={
+                    "type": "agent",
+                    "id": "conversation-context",
+                },
+                target={
+                    "type": "memory",
+                    "id": "persistent-memory",
+                },
+                status=status,
+                metadata=metadata or {},
+            )
+        )
+    )
+
+
 def retrieve_memory_context(
     message: str,
     *,
@@ -41,6 +82,17 @@ def retrieve_memory_context(
 
     if not query_tokens:
         return []
+
+    _publish_memory_event(
+        "memory.search_started",
+        status="running",
+        metadata={
+            "namespace": "core",
+            "scope": "shared,system",
+            "query_token_count": len(query_tokens),
+            "limit": limit,
+        },
+    )
 
     store = MemoryStore(
         "data/cybertron.db"
@@ -143,6 +195,30 @@ def retrieve_memory_context(
 
         if len(results) >= limit:
             break
+
+    result_scopes = sorted(
+        {
+            str(memory.get("scope", "unknown"))
+            for memory in results
+        }
+    )
+    result_kinds = sorted(
+        {
+            str(memory.get("kind", "unknown"))
+            for memory in results
+        }
+    )
+
+    _publish_memory_event(
+        "memory.search_completed",
+        status="complete",
+        metadata={
+            "namespace": "core",
+            "scope": ",".join(result_scopes) if result_scopes else "none",
+            "kinds": result_kinds,
+            "result_count": len(results),
+        },
+    )
 
     return results
 
