@@ -1,0 +1,114 @@
+.security-policy-panel {
+  width: min(1180px, 94vw);
+  margin: 18px auto;
+  padding: 18px;
+  border: 1px solid rgba(83, 230, 255, 0.18);
+  background: rgba(3, 14, 20, 0.78);
+  box-shadow:
+    inset 0 0 30px rgba(0, 255, 255, 0.03),
+    0 0 25px rgba(0, 255, 255, 0.04);
+}
+
+.security-policy-header,
+.security-policy-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.security-policy-header span,
+.security-policy-card span {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  opacity: 0.65;
+}
+
+.security-policy-header strong {
+  display: block;
+  margin-top: 4px;
+  letter-spacing: 0.08em;
+}
+
+.security-policy-state {
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+}
+
+.security-policy-state.approved {
+  color: #8cff72;
+}
+
+.security-policy-state.warning {
+  color: #ffd166;
+}
+
+.security-policy-state.alert {
+  color: #ff6b6b;
+}
+
+.security-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.security-policy-card {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid rgba(83, 230, 255, 0.13);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.security-policy-card strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 1.45rem;
+  font-weight: 500;
+}
+
+.security-policy-card small {
+  display: block;
+  opacity: 0.58;
+  line-height: 1.45;
+}
+
+.security-policy-card ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+
+.security-policy-card.unexpected {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.security-policy-card.missing {
+  border-color: rgba(255, 209, 102, 0.3);
+}
+
+.security-policy-note {
+  margin: 14px 0 0;
+  color: #6f8f96;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  .security-policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-policy-header,
+  .security-policy-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
