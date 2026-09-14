@@ -39,6 +39,12 @@ class OllamaProvider(ModelProvider):
             "model": model,
             "messages": messages,
             "stream": False,
+            # C.O.R.E. needs a user-visible answer in message.content.
+            # Thinking-capable Ollama models can otherwise spend the whole
+            # generation in message.thinking and finish with empty content,
+            # which makes the Dashboard appear to receive no response even
+            # though inference completed successfully.
+            "think": False,
         }
 
         async with httpx.AsyncClient(timeout=300.0) as client:
@@ -60,6 +66,9 @@ class OllamaProvider(ModelProvider):
             "model": model,
             "messages": messages,
             "stream": True,
+            # Keep streaming output in message.content for the C.O.R.E. UI.
+            # Internal model thinking is not used as the user-facing reply.
+            "think": False,
         }
 
         timeout = httpx.Timeout(
