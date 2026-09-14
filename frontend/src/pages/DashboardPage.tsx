@@ -234,6 +234,17 @@ export default function DashboardPage() {
     return () => socket.close();
   }, []);
 
+  function stopSpeaking() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.pause();
+    audio.currentTime = 0;
+    URL.revokeObjectURL(audio.src);
+    audioRef.current = null;
+    setVoiceState("READY");
+  }
+
   async function speak(text: string) {
     const speechText = cleanSpeechText(text);
     if (!voiceEnabled || !speechText || voiceState === "OFFLINE") return;
@@ -244,8 +255,7 @@ export default function DashboardPage() {
       const url = URL.createObjectURL(blob);
 
       if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
+        stopSpeaking();
       }
 
       const audio = new Audio(url);
@@ -339,10 +349,7 @@ export default function DashboardPage() {
 
   function toggleVoice() {
     if (voiceEnabled && audioRef.current) {
-      audioRef.current.pause();
-      URL.revokeObjectURL(audioRef.current.src);
-      audioRef.current = null;
-      setVoiceState("READY");
+      stopSpeaking();
     }
     setVoiceEnabled((enabled) => !enabled);
   }
@@ -522,6 +529,16 @@ export default function DashboardPage() {
           >
             {voiceEnabled ? "🔊 VOICE ON" : "🔇 VOICE OFF"}
           </button>
+          {voiceState === "SPEAKING" && (
+            <button
+              type="button"
+              className="voice-button"
+              onClick={stopSpeaking}
+              title="Stop Kokoro speech playback"
+            >
+              ⏹ STOP SPEAKING
+            </button>
+          )}
           <div className={`voice-state ${voiceState.toLowerCase()}`}>
             {voiceProvider} + {sttProvider} • {voiceState}
             {!micSupported ? " • MIC UNSUPPORTED" : !sttReady ? " • STT OFFLINE" : ""}
