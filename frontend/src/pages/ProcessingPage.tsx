@@ -19,8 +19,41 @@ type ProcessingStage =
   | "COMPLETE"
   | "ERROR";
 
+type ProvenanceState = {
+  userInput: boolean;
+  agent: string;
+  memoryCount: number | null;
+  memoryScopes: string[];
+  memoryKinds: string[];
+  memorySources: string[];
+  memoryNamespaces: string[];
+  tools: string[];
+  model: string;
+};
+
+const EMPTY_PROVENANCE: ProvenanceState = {
+  userInput: false,
+  agent: "NONE",
+  memoryCount: null,
+  memoryScopes: [],
+  memoryKinds: [],
+  memorySources: [],
+  memoryNamespaces: [],
+  tools: [],
+  model: "UNKNOWN",
+};
+
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && !!item.trim());
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function entityId(
@@ -142,6 +175,10 @@ function appendTrail(current: CoreEvent[], event: CoreEvent): CoreEvent[] {
   return [...current, event].slice(-10);
 }
 
+function joinValues(values: string[], empty = "NONE"): string {
+  return values.length ? values.join(", ") : empty;
+}
+
 export default function ProcessingPage() {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<CoreEvent | null>(null);
@@ -153,6 +190,7 @@ export default function ProcessingPage() {
   const [activeTool, setActiveTool] = useState("NONE");
   const [activeModel, setActiveModel] = useState("UNKNOWN");
   const [memoryAction, setMemoryAction] = useState("IDLE");
+  const [provenance, setProvenance] = useState<ProvenanceState>(EMPTY_PROVENANCE);
 
   useEffect(() => {
     const socket = connectCoreWebSocket(
@@ -167,6 +205,10 @@ export default function ProcessingPage() {
           setActiveAgent("ROUTING...");
           setActiveTool("NONE");
           setMemoryAction("IDLE");
+          setProvenance({
+            ...EMPTY_PROVENANCE,
+            userInput: true,
+          });
         } else {
           setEventTrail((current) => appendTrail(current, event));
           setEventCount((count) => count + 1);
@@ -176,20 +218,50 @@ export default function ProcessingPage() {
         const agent = agentLabel(event);
         if (agent && event.event_type.startsWith("agent.")) {
           setActiveAgent(agent);
+          setProvenance((current) => ({ ...current, agent }));
         }
 
         const tool = toolLabel(event);
         if (tool && event.event_type.startsWith("tool.")) {
           setActiveTool(tool);
+          setProvenance((current) => ({
+            ...current,
+            tools: current.tools.includes(tool)
+              ? current.tools
+              : [...current.tools, tool],
+          }));
         }
 
         const model = modelLabel(event);
         if (model && event.event_type.startsWith("model.")) {
           setActiveModel(model);
+          setProvenance((current) => ({ ...current, model }));
         }
 
         if (event.event_type.startsWith("memory.")) {
           setMemoryAction(memoryLabel(event));
+        }
+
+        if (event.event_type === "memory.search_completed") {
+          const resultCount = numberValue(event.metadata?.result_count);
+          const scopes = stringList(event.metadata?.scopes);
+          const kinds = stringList(event.metadata?.kinds);
+          const sources = stringList(event.metadata?.sources);
+          const namespaces = stringList(event.metadata?.namespaces);
+          const fallbackScope = stringValue(event.metadata?.scope);
+
+          setProvenance((current) => ({
+            ...current,
+            memoryCount: resultCount,
+            memoryScopes: scopes.length
+              ? scopes
+              : fallbackScope && fallbackScope !== "none"
+                ? fallbackScope.split(",").map((value) => value.trim()).filter(Boolean)
+                : [],
+            memoryKinds: kinds,
+            memorySources: sources,
+            memoryNamespaces: namespaces,
+          }));
         }
 
         if (event.event_type === "response.generated") {
@@ -218,8 +290,8 @@ export default function ProcessingPage() {
         <span>LIVE ORCHESTRATION</span>
         <h1>Processing Graph</h1>
         <p>
-          Real-time cognition flow across routing, agents, memory,
-          tools, and the active model.
+          Real-time cognition flow, information provenance, routing,
+          agents, memory, tools, and active-model execution.
         </p>
       </div>
 
@@ -265,6 +337,83 @@ export default function ProcessingPage() {
         <strong>{currentOperation}</strong>
         <small>{lastEvent?.event_type ?? "core.idle"}</small>
       </div>
+
+      <section className="processing-provenance" aria-label="Model information provenance">
+        <div className="processing-provenance-header">
+          <div>
+            <span>INFORMATION PROVENANCE</span>
+            <strong>What is feeding the model?</strong>
+          </div>
+          <small>TRACE {traceShort}</small>
+        </div>
+
+        <div className="processing-provenance-flow">
+          <article className={provenance.userInput ? "active" : ""}>
+            <span>USER INPUT</span>
+            <strong>{provenance.userInput ? "PRESENT" : "WAITING"}</strong>
+            <small>Prompt content is not mirrored into telemetry.</small>
+          </article>
+
+          <article className={provenance.agent !== "NONE" ? "active" : ""}>
+            <span>AGENT / POLICY</span>
+            <strong title={provenance.agent}>{provenance.agent}</strong>
+            <small>Selected orchestration authority.</small>
+          </article>
+
+          <article className={provenance.memoryCount !== null ? "active" : ""}>
+            <span>PERSISTENT MEMORY</span>
+            <strong>
+              {provenance.memoryCount === null
+                ? "NOT QUERIED"
+                : `${provenance.memoryCount} RECORD${provenance.memoryCount === 1 ? "" : "S"}`}
+            </strong>
+            <small>Scopes: {joinValues(provenance.memoryScopes)}</small>
+          </article>
+
+          <article className={provenance.tools.length ? "active" : ""}>
+            <span>TOOLS / LIVE DATA</span>
+            <strong title={joinValues(provenance.tools)}>{joinValues(provenance.tools)}</strong>
+            <small>Verified runtime and external evidence path.</small>
+          </article>
+
+          <article className={provenance.model !== "UNKNOWN" ? "active" : ""}>
+            <span>MODEL</span>
+            <strong title={provenance.model}>{provenance.model}</strong>
+            <small>Inference destination for assembled context.</small>
+          </article>
+        </div>
+
+        <div className="processing-provenance-detail">
+          <div>
+            <span>MEMORY SOURCES</span>
+            <strong title={joinValues(provenance.memorySources)}>
+              {joinValues(provenance.memorySources)}
+            </strong>
+          </div>
+          <div>
+            <span>MEMORY KINDS</span>
+            <strong title={joinValues(provenance.memoryKinds)}>
+              {joinValues(provenance.memoryKinds)}
+            </strong>
+          </div>
+          <div>
+            <span>NAMESPACES</span>
+            <strong title={joinValues(provenance.memoryNamespaces)}>
+              {joinValues(provenance.memoryNamespaces)}
+            </strong>
+          </div>
+          <div>
+            <span>EVIDENCE CHANNELS</span>
+            <strong>
+              {[provenance.userInput ? "USER" : null,
+                provenance.memoryCount !== null ? "MEMORY" : null,
+                provenance.tools.length ? "TOOLS" : null]
+                .filter(Boolean)
+                .join(" + ") || "NONE"}
+            </strong>
+          </div>
+        </div>
+      </section>
 
       <div className="core-processing-layout">
         <div className="core-processing-graph">
