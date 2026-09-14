@@ -194,3 +194,38 @@ export async function acknowledgeIncident(
 
   return response.json();
 }
+
+export type IncidentTimeline = {
+  incident_id: string;
+  found: boolean;
+  active: boolean;
+  acknowledged: boolean;
+  opened_at?: string | null;
+  acknowledged_at?: string | null;
+  resolved_at?: string | null;
+  duration_seconds?: number | null;
+  severity?: string | null;
+  value?: number | null;
+  threshold?: number | null;
+  events: IncidentEvent[];
+};
+
+export async function getIncidentTimeline(
+  incidentId: string
+): Promise<IncidentTimeline> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/incidents/${encodeURIComponent(
+      incidentId
+    )}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Incident timeline returned ${response.status}`
+    );
+  }
+
+  return response.json();
+}

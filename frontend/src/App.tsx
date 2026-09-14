@@ -7,6 +7,8 @@ import {
   getTelemetryHistory,
   getIncidents,
   acknowledgeIncident,
+  getIncidentTimeline,
+  type IncidentTimeline,
   type StatusOverview,
   type ServiceHealthItem,
   type IncidentEvent
@@ -201,6 +203,8 @@ export default function App() {
     useState<"all" | "opened" | "resolved">("all");
   const [incidentSeverityFilter, setIncidentSeverityFilter] =
     useState<"all" | "warning" | "critical" | "info">("all");
+  const [selectedIncident, setSelectedIncident] =
+    useState<IncidentTimeline | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -442,6 +446,20 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, []);
+
+  async function openIncidentTimeline(
+    incidentId: string
+  ) {
+    try {
+      const detail = await getIncidentTimeline(
+        incidentId
+      );
+
+      setSelectedIncident(detail);
+    } catch {
+      setSelectedIncident(null);
+    }
+  }
 
   async function acknowledgeActiveIncident(
     incidentId: string
@@ -905,6 +923,11 @@ export default function App() {
                 <article
                   key={`${incident.id}-${incident.timestamp ?? index}`}
                   className={`incident-item incident-${incident.severity} incident-${incident.state}`}
+                  onClick={() =>
+                    void openIncidentTimeline(
+                      incident.id
+                    )
+                  }
                 >
                   <div className="incident-item-header">
                     <strong>{incident.title}</strong>
@@ -962,6 +985,100 @@ export default function App() {
                   </small>
                 </article>
               ))}
+          </div>
+        )}
+        {selectedIncident && (
+          <div className="incident-detail-panel">
+            <div className="incident-detail-heading">
+              <div>
+                <span>INCIDENT DETAIL</span>
+                <strong>
+                  {selectedIncident.incident_id}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedIncident(null)
+                }
+              >
+                CLOSE
+              </button>
+            </div>
+
+            <div className="incident-detail-grid">
+              <div>
+                <span>STATE</span>
+                <strong>
+                  {selectedIncident.active
+                    ? selectedIncident.acknowledged
+                      ? "ACKNOWLEDGED"
+                      : "ACTIVE"
+                    : "RESOLVED"}
+                </strong>
+              </div>
+
+              <div>
+                <span>SEVERITY</span>
+                <strong>
+                  {selectedIncident.severity?.toUpperCase() ??
+                    "N/A"}
+                </strong>
+              </div>
+
+              <div>
+                <span>DURATION</span>
+                <strong>
+                  {typeof selectedIncident.duration_seconds ===
+                  "number"
+                    ? `${selectedIncident.duration_seconds.toFixed(
+                        1
+                      )} sec`
+                    : selectedIncident.active
+                      ? "ONGOING"
+                      : "N/A"}
+                </strong>
+              </div>
+
+              <div>
+                <span>VALUE / THRESHOLD</span>
+                <strong>
+                  {selectedIncident.value ?? "N/A"}
+                  {" / "}
+                  {selectedIncident.threshold ?? "N/A"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="incident-timeline">
+              {selectedIncident.events.map(
+                (event, index) => (
+                  <div
+                    key={`${event.state}-${event.timestamp}-${index}`}
+                    className={`timeline-event timeline-${event.state}`}
+                  >
+                    <div className="timeline-dot" />
+
+                    <div>
+                      <strong>
+                        {event.state.toUpperCase()}
+                      </strong>
+
+                      <span>
+                        {event.timestamp
+                          ? new Date(
+                              event.timestamp
+                            ).toLocaleString()
+                          : "TIME N/A"}
+                      </span>
+
+                      <p>{event.message}</p>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         )}
       </section>

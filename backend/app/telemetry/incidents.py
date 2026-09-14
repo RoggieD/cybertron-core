@@ -319,3 +319,125 @@ def acknowledged_incident_ids() -> list[str]:
                 acknowledged.append(incident_id)
 
     return sorted(acknowledged)
+
+def incident_timeline(
+    incident_id: str,
+) -> dict:
+    initialize()
+
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                incident_id,
+                severity,
+                title,
+                message,
+                state,
+                timestamp,
+                value,
+                threshold
+            FROM incidents
+            WHERE incident_id = ?
+            ORDER BY id ASC
+            """,
+            (incident_id,),
+        ).fetchall()
+
+    events = [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in rows
+    ]
+
+    opened = next(
+        (e for e in events if e["state"] == "opened"),
+        None,
+    )
+
+    acknowledged = next(
+        (e for e in events if e["state"] == "acknowledged"),
+        None,
+    )
+
+    resolved = next(
+        (
+            e
+            for e in reversed(events)
+            if e["state"] == "resolved"
+        ),
+        None,
+    )
+
+    duration_seconds = None
+
+    if opened and resolved:
+        try:
+            opened_at = datetime.fromisoformat(
+                opened["timestamp"]
+            )
+            resolved_at = datetime.fromisoformat(
+                resolved["timestamp"]
+            )
+
+            duration_seconds = round(
+                (
+                    resolved_at - opened_at
+                ).total_seconds(),
+                2,
+            )
+        except ValueError:
+            pass
+
+    with _lock:
+        active = incident_id in _active_ids
+
+    return {
+        "incident_id": incident_id,
+        "found": bool(events),
+        "active": active,
+        "acknowledged": (
+            acknowledged is not None
+            and active
+        ),
+        "opened_at": (
+            opened["timestamp"]
+            if opened
+            else None
+        ),
+        "acknowledged_at": (
+            acknowledged["timestamp"]
+            if acknowledged
+            else None
+        ),
+        "resolved_at": (
+            resolved["timestamp"]
+            if resolved
+            else None
+        ),
+        "duration_seconds": duration_seconds,
+        "severity": (
+            opened["severity"]
+            if opened
+            else None
+        ),
+        "value": (
+            opened.get("value")
+            if opened
+            else None
+        ),
+        "threshold": (
+            opened.get("threshold")
+            if opened
+            else None
+        ),
+        "events": events,
+    }

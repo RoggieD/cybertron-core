@@ -72,3 +72,13 @@ async def acknowledge_status_incident(
     )
 
     return acknowledge_incident(incident_id)
+
+@router.get("/incidents/{incident_id}")
+async def status_incident_detail(
+    incident_id: str,
+) -> dict:
+    from backend.app.telemetry.incidents import (
+        incident_timeline,
+    )
+
+    return incident_timeline(incident_id)
