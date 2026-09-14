@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-import App from "./App";
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
 import DashboardPage from "./pages/DashboardPage";
 import IncidentsPage from "./pages/IncidentsPage";
+import MemoryPage from "./pages/MemoryPage";
 import ProcessingPage from "./pages/ProcessingPage";
 import ServicesPage from "./pages/ServicesPage";
 import SystemsPage from "./pages/SystemsPage";
@@ -70,7 +70,7 @@ export default function CoreConsole() {
       {page === "systems" && <SystemsPage />}
       {page === "services" && <ServicesPage />}
       {page === "incidents" && <IncidentsPage />}
-      {page === "memory" && <App />}
+      {page === "memory" && <MemoryPage />}
     </>
   );
 }
