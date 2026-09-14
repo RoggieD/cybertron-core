@@ -15,6 +15,7 @@ from backend.app.tools.renderers import (
     render_verified_tool_result,
     should_return_verified_only,
 )
+from backend.app.memory.context import format_memory_context
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -32,6 +33,10 @@ def build_messages(
     tool_id: str | None = None,
     tool_result: dict | None = None,
 ) -> list[dict]:
+    memory_context = format_memory_context(
+        message
+    )
+
     return [
         {
             "role": "system",
@@ -47,6 +52,11 @@ def build_messages(
                 "Verified tool results override model assumptions. "
                 "Never change counts, states, names, or measurements supplied "
                 "by a tool. "
+                + (
+                    "\n\n" + memory_context
+                    if memory_context
+                    else ""
+                )
                 + (
                     "\n\n" + format_tool_context(tool_id, tool_result)
                     if tool_id and tool_result is not None
