@@ -1329,3 +1329,55 @@ footer {
     flex-direction: column;
   }
 }
+
+/* Incident severity controls */
+
+.incident-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.incident-counts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.incident-count {
+  padding: 5px 8px;
+  border: 1px solid currentColor;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+}
+
+.incident-count.critical {
+  color: #ff6b6b;
+}
+
+.incident-count.warning {
+  color: #ffd166;
+}
+
+.severity-filters button.active {
+  box-shadow: 0 0 9px currentColor;
+}
+
+.severity-filters button:nth-child(2).active {
+  color: #ffd166;
+}
+
+.severity-filters button:nth-child(3).active {
+  color: #ff6b6b;
+}
+
+.severity-filters button:nth-child(4).active {
+  color: #64ffd8;
+}
+
+@media (max-width: 900px) {
+  .incident-header-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

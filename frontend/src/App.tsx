@@ -196,6 +196,8 @@ export default function App() {
     useState<string[]>([]);
   const [incidentFilter, setIncidentFilter] =
     useState<"all" | "opened" | "resolved">("all");
+  const [incidentSeverityFilter, setIncidentSeverityFilter] =
+    useState<"all" | "warning" | "critical" | "info">("all");
 
   useEffect(() => {
     let active = true;
@@ -560,6 +562,20 @@ export default function App() {
     }
   }
 
+  const activeIncidentEvents = incidents.filter(
+    (incident) =>
+      incident.state === "opened" &&
+      activeIncidentIds.includes(incident.id)
+  );
+
+  const activeCriticalCount = activeIncidentEvents.filter(
+    (incident) => incident.severity === "critical"
+  ).length;
+
+  const activeWarningCount = activeIncidentEvents.filter(
+    (incident) => incident.severity === "warning"
+  ).length;
+
   const telemetryState = getTelemetryState(
     overview,
     overviewError
@@ -763,25 +779,63 @@ export default function App() {
           </div>
 
           <div className="incident-header-actions">
-            <div className="incident-filters">
-              {(["all", "opened", "resolved"] as const).map(
-                (filter) => (
+            <div className="incident-counts">
+              <span className="incident-count critical">
+                CRITICAL {activeCriticalCount}
+              </span>
+
+              <span className="incident-count warning">
+                WARNING {activeWarningCount}
+              </span>
+            </div>
+
+            <div className="incident-filter-stack">
+              <div className="incident-filters">
+                {(["all", "opened", "resolved"] as const).map(
+                  (filter) => (
+                    <button
+                      type="button"
+                      key={filter}
+                      className={
+                        incidentFilter === filter
+                          ? "active"
+                          : ""
+                      }
+                      onClick={() =>
+                        setIncidentFilter(filter)
+                      }
+                    >
+                      {filter.toUpperCase()}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <div className="incident-filters severity-filters">
+                {(
+                  [
+                    "all",
+                    "warning",
+                    "critical",
+                    "info"
+                  ] as const
+                ).map((severity) => (
                   <button
                     type="button"
-                    key={filter}
+                    key={severity}
                     className={
-                      incidentFilter === filter
+                      incidentSeverityFilter === severity
                         ? "active"
                         : ""
                     }
                     onClick={() =>
-                      setIncidentFilter(filter)
+                      setIncidentSeverityFilter(severity)
                     }
                   >
-                    {filter.toUpperCase()}
+                    {severity.toUpperCase()}
                   </button>
-                )
-              )}
+                ))}
+              </div>
             </div>
 
             <div
@@ -805,11 +859,18 @@ export default function App() {
         ) : (
           <div className="incident-list">
             {[...incidents]
-              .filter(
-                (incident) =>
+              .filter((incident) => {
+                const stateMatches =
                   incidentFilter === "all" ||
-                  incident.state === incidentFilter
-              )
+                  incident.state === incidentFilter;
+
+                const severityMatches =
+                  incidentSeverityFilter === "all" ||
+                  incident.severity ===
+                    incidentSeverityFilter;
+
+                return stateMatches && severityMatches;
+              })
               .reverse()
               .slice(0, 12)
               .map((incident, index) => (
