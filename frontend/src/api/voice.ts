@@ -29,6 +29,19 @@ function firstMatch(text: string, pattern: RegExp): string | null {
   return text.match(pattern)?.[1]?.trim() ?? null;
 }
 
+function spokenUptime(text: string): string | null {
+  const compact = text.match(/Uptime:\s*(\d+)d\s+(\d+)h\s+(\d+)m/i);
+  if (compact) {
+    const [, days, hours, minutes] = compact;
+    return `${Number(days)} days, ${Number(hours)} hours, and ${Number(minutes)} minutes`;
+  }
+
+  return firstMatch(
+    text,
+    /Uptime:\s*([0-9]+(?:\.[0-9]+)?\s*(?:seconds?|minutes?|hours?|days?))/i,
+  );
+}
+
 function toolAwareSpeechText(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   const upper = normalized.toUpperCase();
@@ -38,6 +51,7 @@ function toolAwareSpeechText(text: string): string {
     const cpu = firstMatch(normalized, /CPU usage:\s*([0-9.]+%)/i);
     const memory = firstMatch(normalized, /Memory usage:\s*([0-9.]+%)/i);
     const disk = firstMatch(normalized, /Disk usage:\s*([0-9.]+%)/i);
+    const uptime = spokenUptime(normalized);
     const running = firstMatch(normalized, /Running:\s*(\d+)/i);
     const containers = firstMatch(normalized, /Containers:\s*(\d+)/i);
     const healthy = firstMatch(normalized, /Healthy:\s*(\d+\/\d+)/i);
@@ -51,6 +65,7 @@ function toolAwareSpeechText(text: string): string {
     if (memory) utilization.push(`memory is ${memory}`);
     if (disk) utilization.push(`disk usage is ${disk}`);
     if (utilization.length) parts.push(`${utilization.join(", ")}.`);
+    if (uptime) parts.push(`Uptime is ${uptime}.`);
 
     if (running && containers) {
       parts.push(`${running} of ${containers} containers are running.`);
