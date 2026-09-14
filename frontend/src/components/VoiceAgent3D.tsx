@@ -16,6 +16,7 @@ type VoiceAgent3DProps = {
   activeTool?: string;
   activeModel?: string;
   orchestrationState?: string;
+  speechAnalyser?: AnalyserNode | null;
 };
 
 type WidgetPosition = {
@@ -109,6 +110,7 @@ export default function VoiceAgent3D({
   activeTool,
   activeModel,
   orchestrationState = "IDLE",
+  speechAnalyser = null,
 }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
@@ -122,6 +124,10 @@ export default function VoiceAgent3D({
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
+  const operationActiveRef = useRef(operationActive);
+  const speechAnalyserRef = useRef<AnalyserNode | null>(speechAnalyser);
+  operationActiveRef.current = operationActive;
+  speechAnalyserRef.current = speechAnalyser;
 
   useEffect(() => {
     if (!active) return;
@@ -253,6 +259,8 @@ export default function VoiceAgent3D({
     resizeObserver.observe(mount);
 
     const clock = new THREE.Clock();
+    const audioSamples = new Uint8Array(128);
+    let smoothedAudioEnergy = 0;
     let frame = 0;
 
     const animate = () => {
@@ -260,6 +268,16 @@ export default function VoiceAgent3D({
       const elapsed = clock.getElapsedTime();
       const state = visualStateRef.current;
       const palette = paletteForState(state);
+      const analyser = speechAnalyserRef.current;
+      let audioEnergy = 0;
+
+      if (analyser && state === "SPEAKING") {
+        analyser.getByteFrequencyData(audioSamples);
+        let total = 0;
+        for (const sample of audioSamples) total += sample;
+        audioEnergy = Math.min(1, (total / audioSamples.length / 255) * 4.2);
+      }
+      smoothedAudioEnergy += (audioEnergy - smoothedAudioEnergy) * 0.24;
 
       const primary = new THREE.Color(palette.primary);
       const secondary = new THREE.Color(palette.secondary);
@@ -271,11 +289,12 @@ export default function VoiceAgent3D({
       particlesMaterial.color.lerp(primary, 0.08);
       key.color.lerp(secondary, 0.08);
 
-      const operationEnergy = operationActive ? 1.28 : 1;
-      const pulseRate = state === "SPEAKING" ? 7.5 : state === "LISTENING" ? 4.2 : operationActive ? 3.2 : 2.1;
-      const pulse = 1 + Math.sin(elapsed * pulseRate) * 0.055 * palette.energy * operationEnergy;
+      const isOperating = operationActiveRef.current;
+      const operationEnergy = isOperating ? 1.28 : 1;
+      const pulseRate = state === "SPEAKING" ? 7.5 : state === "LISTENING" ? 4.2 : isOperating ? 3.2 : 2.1;
+      const pulse = 1 + Math.sin(elapsed * pulseRate) * 0.055 * palette.energy * operationEnergy + smoothedAudioEnergy * 0.2;
       core.scale.setScalar(pulse);
-      inner.scale.setScalar(0.96 + Math.sin(elapsed * pulseRate + 1.2) * 0.07 * palette.energy);
+      inner.scale.setScalar(0.96 + Math.sin(elapsed * pulseRate + 1.2) * 0.07 * palette.energy + smoothedAudioEnergy * 0.26);
 
       core.rotation.x += 0.0028 * palette.energy;
       core.rotation.y += 0.0045 * palette.energy * operationEnergy;
@@ -285,16 +304,21 @@ export default function VoiceAgent3D({
       ringTwo.rotation.x -= 0.004 * palette.energy * operationEnergy;
       particles.rotation.y -= 0.0018 * palette.energy;
       particles.rotation.x = Math.sin(elapsed * 0.22) * 0.12;
+      particlesMaterial.size = 0.025 + smoothedAudioEnergy * 0.055;
+      particlesMaterial.opacity = 0.55 + smoothedAudioEnergy * 0.35;
 
       if (state === "SPEAKING") {
-        group.position.y = Math.sin(elapsed * 5.5) * 0.035;
-        ringOne.scale.setScalar(1 + Math.sin(elapsed * 8.5) * 0.045);
+        group.position.y = Math.sin(elapsed * 5.5) * 0.035 + smoothedAudioEnergy * 0.025;
+        ringOne.scale.setScalar(1 + Math.sin(elapsed * 8.5) * 0.045 + smoothedAudioEnergy * 0.2);
+        ringTwo.scale.setScalar(1 + smoothedAudioEnergy * 0.12);
       } else if (state === "LISTENING") {
         group.position.y = Math.sin(elapsed * 1.8) * 0.025;
         ringOne.scale.setScalar(1 + Math.sin(elapsed * 3.5) * 0.025);
+        ringTwo.scale.setScalar(1);
       } else {
         group.position.y = Math.sin(elapsed * 1.2) * 0.018;
         ringOne.scale.setScalar(1);
+        ringTwo.scale.setScalar(1);
       }
 
       renderer.render(scene, camera);
@@ -320,7 +344,7 @@ export default function VoiceAgent3D({
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [active, operationActive]);
+  }, [active]);
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || window.innerWidth <= 900) return;
