@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-import {
-  connectCoreWebSocket,
-  type CoreEvent,
-} from "../api/websocket";
+import type { CoreEvent } from "../api/websocket";
 
 type NodeId =
   | "user"
@@ -41,6 +38,7 @@ const EDGES: GraphEdge[] = [
   { from: "agent", to: "tool" },
   { from: "memory", to: "model" },
   { from: "tool", to: "model" },
+  { from: "model", to: "user" },
 ];
 
 function eventNode(eventType: string): NodeId | null {
@@ -86,31 +84,33 @@ function createLabel(text: string) {
   return { sprite, material, texture };
 }
 
-export default function CognitionGraph() {
+export default function CognitionGraph({
+  event,
+  connected,
+}: {
+  event: CoreEvent | null;
+  connected: boolean;
+}) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const activeNodeRef = useRef<NodeId | null>(null);
   const previousNodeRef = useRef<NodeId | null>(null);
+  const transitionStartedRef = useRef(0);
   const [activeNode, setActiveNode] = useState<NodeId | null>(null);
   const [lastEvent, setLastEvent] = useState("WAITING");
-  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = connectCoreWebSocket(
-      (event: CoreEvent) => {
-        const nextNode = eventNode(event.event_type);
-        setLastEvent(event.event_type);
+    if (!event) return;
 
-        if (nextNode) {
-          previousNodeRef.current = activeNodeRef.current;
-          activeNodeRef.current = nextNode;
-          setActiveNode(nextNode);
-        }
-      },
-      setConnected,
-    );
+    const nextNode = eventNode(event.event_type);
+    setLastEvent(event.event_type);
 
-    return () => socket.close();
-  }, []);
+    if (nextNode) {
+      previousNodeRef.current = activeNodeRef.current;
+      activeNodeRef.current = nextNode;
+      transitionStartedRef.current = performance.now();
+      setActiveNode(nextNode);
+    }
+  }, [event]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -241,11 +241,24 @@ export default function CognitionGraph() {
       edgeObjects.push({ edge, line, material });
     }
 
+    const packetGeometry = new THREE.SphereGeometry(0.11, 20, 20);
+    const packetMaterial = new THREE.MeshBasicMaterial({
+      color: 0xc7fbff,
+      transparent: true,
+      opacity: 0,
+    });
+    const packet = new THREE.Mesh(packetGeometry, packetMaterial);
+    scene.add(packet);
+
+    const packetLight = new THREE.PointLight(0x53e6ff, 10, 3.2);
+    packet.add(packetLight);
+
     let frame = 0;
 
     const animate = () => {
       frame = requestAnimationFrame(animate);
-      const time = performance.now() * 0.001;
+      const now = performance.now();
+      const time = now * 0.001;
       const current = activeNodeRef.current;
       const previous = previousNodeRef.current;
 
@@ -283,13 +296,33 @@ export default function CognitionGraph() {
         const activePath =
           previous !== null &&
           current !== null &&
-          edge.from === previous &&
-          edge.to === current;
+          ((edge.from === previous && edge.to === current) ||
+            (edge.from === current && edge.to === previous));
 
         material.color.setHex(activePath ? 0x8ff5ff : 0x245968);
         material.opacity = activePath
           ? 0.82 + Math.sin(time * 9) * 0.16
           : 0.48;
+      }
+
+      const previousMesh = previous ? nodeObjects.get(previous) : null;
+      const currentMesh = current ? nodeObjects.get(current) : null;
+
+      if (previousMesh && currentMesh && previous !== current) {
+        const elapsed = now - transitionStartedRef.current;
+        const duration = 650;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        packet.position.lerpVectors(
+          previousMesh.position,
+          currentMesh.position,
+          eased,
+        );
+        packetMaterial.opacity = progress < 1 ? 0.95 : 0;
+        packet.scale.setScalar(1 + Math.sin(time * 18) * 0.2);
+      } else {
+        packetMaterial.opacity = 0;
       }
 
       renderer.render(scene, camera);
@@ -315,6 +348,8 @@ export default function CognitionGraph() {
       haloGeometry.dispose();
       starGeometry.dispose();
       starMaterial.dispose();
+      packetGeometry.dispose();
+      packetMaterial.dispose();
 
       for (const mesh of nodeObjects.values()) {
         (mesh.material as THREE.Material).dispose();
