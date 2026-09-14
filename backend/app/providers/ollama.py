@@ -13,6 +13,27 @@ class OllamaProvider(ModelProvider):
         self.settings = get_settings()
         self.base_url = self.settings.ollama_base_url.rstrip("/")
 
+    def _chat_payload(
+        self,
+        model: str,
+        messages: list[dict],
+        *,
+        stream: bool,
+    ) -> dict:
+        return {
+            "model": model,
+            "messages": messages,
+            "stream": stream,
+            # Keep the reply in message.content for the C.O.R.E. UI.
+            "think": False,
+            # Security/posture reports can be longer than Ollama's default
+            # generation budget. Make the response budget explicit and
+            # configurable so reports do not stop in the middle of a sentence.
+            "options": {
+                "num_predict": self.settings.ollama_num_predict,
+            },
+        }
+
     async def health(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -35,17 +56,11 @@ class OllamaProvider(ModelProvider):
         model: str,
         messages: list[dict],
     ) -> dict:
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-            # C.O.R.E. needs a user-visible answer in message.content.
-            # Thinking-capable Ollama models can otherwise spend the whole
-            # generation in message.thinking and finish with empty content,
-            # which makes the Dashboard appear to receive no response even
-            # though inference completed successfully.
-            "think": False,
-        }
+        payload = self._chat_payload(
+            model,
+            messages,
+            stream=False,
+        )
 
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
@@ -62,14 +77,11 @@ class OllamaProvider(ModelProvider):
         messages: list[dict],
     ) -> AsyncIterator[dict]:
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            # Keep streaming output in message.content for the C.O.R.E. UI.
-            # Internal model thinking is not used as the user-facing reply.
-            "think": False,
-        }
+        payload = self._chat_payload(
+            model,
+            messages,
+            stream=True,
+        )
 
         timeout = httpx.Timeout(
             connect=10.0,
