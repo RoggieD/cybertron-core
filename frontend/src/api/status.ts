@@ -229,3 +229,37 @@ export async function getIncidentTimeline(
 
   return response.json();
 }
+
+export async function searchIncidents(
+  query: string
+): Promise<IncidentEvent[]> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/incidents/search?q=${encodeURIComponent(
+      query
+    )}&limit=200`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Incident search returned ${response.status}`
+    );
+  }
+
+  const data = await response.json();
+
+  return data.incidents;
+}
+
+export function downloadIncidentCsv(
+  query = ""
+): void {
+  const host = window.location.hostname;
+
+  window.location.href =
+    `http://${host}:8000/api/status/incidents/export?q=${encodeURIComponent(
+      query
+    )}`;
+}
+

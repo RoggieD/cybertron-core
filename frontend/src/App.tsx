@@ -8,6 +8,8 @@ import {
   getIncidents,
   acknowledgeIncident,
   getIncidentTimeline,
+  searchIncidents,
+  downloadIncidentCsv,
   type IncidentTimeline,
   type StatusOverview,
   type ServiceHealthItem,
@@ -205,6 +207,10 @@ export default function App() {
     useState<"all" | "warning" | "critical" | "info">("all");
   const [selectedIncident, setSelectedIncident] =
     useState<IncidentTimeline | null>(null);
+  const [incidentSearch, setIncidentSearch] =
+    useState("");
+  const [incidentSearchBusy, setIncidentSearchBusy] =
+    useState(false);
 
   useEffect(() => {
     let active = true;
@@ -446,6 +452,20 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, []);
+
+  async function runIncidentSearch() {
+    setIncidentSearchBusy(true);
+
+    try {
+      const results = await searchIncidents(
+        incidentSearch.trim()
+      );
+
+      setIncidents(results);
+    } finally {
+      setIncidentSearchBusy(false);
+    }
+  }
 
   async function openIncidentTimeline(
     incidentId: string
@@ -896,6 +916,45 @@ export default function App() {
                 : "ATTENTION"}
             </div>
           </div>
+        </div>
+
+        <div className="incident-search-bar">
+          <input
+            type="text"
+            value={incidentSearch}
+            onChange={(event) =>
+              setIncidentSearch(event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void runIncidentSearch();
+              }
+            }}
+            placeholder="Search incident history..."
+          />
+
+          <button
+            type="button"
+            onClick={() =>
+              void runIncidentSearch()
+            }
+            disabled={incidentSearchBusy}
+          >
+            {incidentSearchBusy
+              ? "SEARCHING..."
+              : "SEARCH"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              downloadIncidentCsv(
+                incidentSearch.trim()
+              )
+            }
+          >
+            EXPORT CSV
+          </button>
         </div>
 
         {incidents.length === 0 ? (

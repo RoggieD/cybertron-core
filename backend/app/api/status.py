@@ -1,5 +1,8 @@
+import csv
+import io
 from backend.app.telemetry.store import recent_samples
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 from backend.app.tools.overview import system_overview
 from backend.app.tools.services import service_status
@@ -82,3 +85,74 @@ async def status_incident_detail(
     )
 
     return incident_timeline(incident_id)
+
+@router.get("/incidents/search")
+async def status_incident_search(
+    q: str = "",
+    severity: str | None = None,
+    state: str | None = None,
+    limit: int = 200,
+) -> dict:
+    from backend.app.telemetry.incidents import (
+        search_incidents,
+    )
+
+    incidents = search_incidents(
+        query=q,
+        severity=severity,
+        state=state,
+        limit=limit,
+    )
+
+    return {
+        "query": q,
+        "count": len(incidents),
+        "incidents": incidents,
+    }
+
+
+@router.get("/incidents/export")
+async def status_incident_export(
+    q: str = "",
+    severity: str | None = None,
+    state: str | None = None,
+) -> Response:
+    from backend.app.telemetry.incidents import (
+        search_incidents,
+    )
+
+    incidents = search_incidents(
+        query=q,
+        severity=severity,
+        state=state,
+        limit=1000,
+    )
+
+    output = io.StringIO()
+
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "id",
+            "severity",
+            "title",
+            "message",
+            "state",
+            "timestamp",
+            "value",
+            "threshold",
+        ],
+    )
+
+    writer.writeheader()
+    writer.writerows(incidents)
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                'attachment; filename="cybertron-incidents.csv"'
+        },
+    )
+

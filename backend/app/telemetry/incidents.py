@@ -441,3 +441,84 @@ def incident_timeline(
         ),
         "events": events,
     }
+
+def search_incidents(
+    query: str = "",
+    severity: str | None = None,
+    state: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    initialize()
+
+    limit = max(1, min(limit, 1000))
+
+    sql = """
+        SELECT
+            incident_id,
+            severity,
+            title,
+            message,
+            state,
+            timestamp,
+            value,
+            threshold
+        FROM incidents
+    """
+
+    clauses = []
+    params: list = []
+
+    if query:
+        clauses.append(
+            """
+            (
+                incident_id LIKE ?
+                OR title LIKE ?
+                OR message LIKE ?
+            )
+            """
+        )
+
+        pattern = f"%{query}%"
+        params.extend(
+            [
+                pattern,
+                pattern,
+                pattern,
+            ]
+        )
+
+    if severity:
+        clauses.append("severity = ?")
+        params.append(severity.lower())
+
+    if state:
+        clauses.append("state = ?")
+        params.append(state.lower())
+
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
+    with _connect() as connection:
+        rows = connection.execute(
+            sql,
+            tuple(params),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in rows
+    ]
+
