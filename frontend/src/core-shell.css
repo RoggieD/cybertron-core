@@ -56,9 +56,48 @@
   box-shadow: inset 0 -2px 0 rgba(83, 230, 255, 0.5);
 }
 
-.core-dashboard-graph {
+.core-processing-page {
   width: min(1180px, calc(100% - 32px));
-  margin: 22px auto 0;
+  margin: 36px auto 48px;
+}
+
+.core-processing-heading {
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.core-processing-heading > span {
+  color: #6addeb;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+}
+
+.core-processing-heading h1 {
+  margin: 8px 0 6px;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 400;
+}
+
+.core-processing-heading p {
+  max-width: 680px;
+  margin: 0 auto;
+  color: #72939a;
+  line-height: 1.5;
+}
+
+.core-processing-graph {
+  width: 100%;
+}
+
+.core-graph-loading {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(83, 230, 255, 0.16);
+  border-radius: 12px;
+  color: #6addeb;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
 }
 
 body[data-core-page="dashboard"] .telemetry-panel,
@@ -67,6 +106,10 @@ body[data-core-page="dashboard"] .service-health-panel,
 body[data-core-page="dashboard"] .incident-analytics-panel,
 body[data-core-page="dashboard"] .incident-panel,
 body[data-core-page="dashboard"] .memory-approval-panel {
+  display: none;
+}
+
+body[data-core-page="processing"] .core-shell {
   display: none;
 }
 
@@ -110,11 +153,11 @@ body[data-core-page="memory"] footer {
   display: none;
 }
 
-body:not([data-core-page="dashboard"]) .core-shell {
+body:not([data-core-page="dashboard"]):not([data-core-page="processing"]) .core-shell {
   padding-top: 28px;
 }
 
-body:not([data-core-page="dashboard"]) .header {
+body:not([data-core-page="dashboard"]):not([data-core-page="processing"]) .header {
   margin-bottom: 8px;
 }
 
