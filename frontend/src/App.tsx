@@ -12,6 +12,7 @@ import "./styles.css";
 type ReactorState =
   | "IDLE"
   | "ROUTING"
+  | "AGENT_ACTIVE"
   | "THINKING"
   | "COMPLETE"
   | "ERROR";
@@ -27,6 +28,8 @@ export default function App() {
     useState<ReactorState>("IDLE");
 
   const [activeModel, setActiveModel] = useState("UNKNOWN");
+  const [activeAgent, setActiveAgent] = useState("NONE");
+
   const [evalCount, setEvalCount] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
 
@@ -49,7 +52,29 @@ export default function App() {
 
         switch (event.event_type) {
           case "prompt.received":
+          case "router.started":
             setReactorState("ROUTING");
+            break;
+
+          case "agent.selected": {
+            const agentName = event.metadata?.agent_name;
+
+            if (typeof agentName === "string") {
+              setActiveAgent(agentName);
+            } else {
+              const agentId = event.target?.id;
+
+              if (typeof agentId === "string") {
+                setActiveAgent(agentId);
+              }
+            }
+
+            setReactorState("AGENT_ACTIVE");
+            break;
+          }
+
+          case "agent.started":
+            setReactorState("AGENT_ACTIVE");
             break;
 
           case "model.request_started":
@@ -58,6 +83,7 @@ export default function App() {
             break;
 
           case "model.request_completed":
+          case "agent.completed":
             setReactorState("COMPLETE");
             break;
 
@@ -96,6 +122,7 @@ export default function App() {
     setDurationMs(null);
     setTraceId(null);
     setTraceEventCount(0);
+    setActiveAgent("ROUTING...");
     setReactorState("ROUTING");
 
     try {
@@ -104,6 +131,24 @@ export default function App() {
         (streamEvent: StreamEvent) => {
           if (streamEvent.model) {
             setActiveModel(streamEvent.model);
+          }
+
+          const eventWithAgent = streamEvent as StreamEvent & {
+            agent_name?: string;
+            agent?: string;
+          };
+
+          if (eventWithAgent.agent_name) {
+            setActiveAgent(eventWithAgent.agent_name);
+          } else if (eventWithAgent.agent) {
+            setActiveAgent(eventWithAgent.agent);
+          }
+
+          if (
+            streamEvent.event === "tool.result" &&
+            streamEvent.content
+          ) {
+            setResponseText(streamEvent.content);
           }
 
           if (
@@ -154,6 +199,11 @@ export default function App() {
     }
   }
 
+  const busy =
+    reactorState === "ROUTING" ||
+    reactorState === "AGENT_ACTIVE" ||
+    reactorState === "THINKING";
+
   return (
     <main className="core-shell">
       <section className="header">
@@ -195,16 +245,14 @@ export default function App() {
               setPrompt(event.target.value)
             }
             placeholder="Ask CyberTron..."
-            disabled={reactorState === "THINKING"}
+            disabled={busy}
           />
 
           <button
             type="submit"
-            disabled={reactorState === "THINKING"}
+            disabled={busy}
           >
-            {reactorState === "THINKING"
-              ? "PROCESSING"
-              : "SEND"}
+            {busy ? "PROCESSING" : "SEND"}
           </button>
         </form>
 
@@ -237,6 +285,11 @@ export default function App() {
         <article>
           <span>ACTIVE MODEL</span>
           <strong>{activeModel}</strong>
+        </article>
+
+        <article>
+          <span>ACTIVE AGENT</span>
+          <strong>{activeAgent}</strong>
         </article>
 
         <article>

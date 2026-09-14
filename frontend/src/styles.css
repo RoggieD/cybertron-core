@@ -366,3 +366,34 @@ footer {
   font-family: monospace;
   letter-spacing: 0.08em;
 }
+
+.reactor-agent_active .reactor-core {
+  animation:
+    pulse 0.9s ease-in-out infinite,
+    agent-glow 1.4s ease-in-out infinite;
+}
+
+.reactor-agent_active .ring-one {
+  animation: rotate 3s linear infinite;
+}
+
+.reactor-agent_active .ring-two {
+  animation: rotate-reverse 4s linear infinite;
+}
+
+@keyframes agent-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 14px #7ff7ff,
+      0 0 48px #16cbe0,
+      0 0 90px rgba(22, 203, 224, 0.55);
+  }
+
+  50% {
+    box-shadow:
+      0 0 24px #ffffff,
+      0 0 85px #5ff5ff,
+      0 0 140px rgba(95, 245, 255, 0.88);
+  }
+}

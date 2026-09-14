@@ -8,6 +8,8 @@ export interface StreamEvent {
   prompt_eval_count?: number;
   eval_count?: number;
   error?: string;
+  tool?: string;
+  verified?: boolean;
 }
 
 export async function streamChat(
