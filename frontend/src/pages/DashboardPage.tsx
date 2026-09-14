@@ -3,7 +3,12 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { getHealth } from "../api/core";
 import { getStatusOverview, type StatusOverview } from "../api/status";
 import { streamChat, type StreamEvent } from "../api/chat";
-import { getVoiceStatus, synthesizeSpeech } from "../api/voice";
+import {
+  getSttStatus,
+  getVoiceStatus,
+  synthesizeSpeech,
+  transcribeAudio,
+} from "../api/voice";
 import {
   connectCoreWebSocket,
   type CoreEvent,
@@ -21,7 +26,13 @@ type ReactorState =
   | "COMPLETE"
   | "ERROR";
 
-type VoiceState = "READY" | "LISTENING" | "SPEAKING" | "OFFLINE" | "ERROR";
+type VoiceState =
+  | "READY"
+  | "LISTENING"
+  | "TRANSCRIBING"
+  | "SPEAKING"
+  | "OFFLINE"
+  | "ERROR";
 type TelemetryState = "HEALTHY" | "ELEVATED" | "WARNING";
 
 function getTelemetryState(
@@ -49,9 +60,24 @@ function getTelemetryState(
   return "HEALTHY";
 }
 
-function speechRecognitionConstructor(): any | null {
-  const browserWindow = window as any;
-  return browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition ?? null;
+function microphoneSupported(): boolean {
+  return Boolean(
+    navigator.mediaDevices?.getUserMedia &&
+    typeof window.MediaRecorder !== "undefined",
+  );
+}
+
+function preferredRecordingMimeType(): string {
+  if (typeof window.MediaRecorder === "undefined") return "";
+
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/ogg",
+  ];
+
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
 function cleanSpeechText(text: string): string {
@@ -86,22 +112,35 @@ export default function DashboardPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceState, setVoiceState] = useState<VoiceState>("OFFLINE");
   const [voiceProvider, setVoiceProvider] = useState("KOKORO");
+  const [sttProvider, setSttProvider] = useState("WHISPER");
+  const [sttReady, setSttReady] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<any | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
-    setMicSupported(Boolean(speechRecognitionConstructor()));
+    setMicSupported(microphoneSupported());
 
-    void getVoiceStatus()
-      .then((status) => {
-        setVoiceProvider(status.provider.toUpperCase());
-        setVoiceState(status.reachable ? "READY" : "OFFLINE");
+    void Promise.all([getVoiceStatus(), getSttStatus()])
+      .then(([ttsStatus, sttStatus]) => {
+        setVoiceProvider(ttsStatus.provider.toUpperCase());
+        setSttProvider(sttStatus.provider.toUpperCase());
+        setSttReady(sttStatus.reachable && sttStatus.authenticated);
+        setVoiceState(ttsStatus.reachable ? "READY" : "OFFLINE");
       })
-      .catch(() => setVoiceState("OFFLINE"));
+      .catch(() => {
+        setSttReady(false);
+        setVoiceState("OFFLINE");
+      });
 
     return () => {
-      recognitionRef.current?.abort?.();
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      recorderRef.current = null;
+      audioChunksRef.current = [];
+
       if (audioRef.current) {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
@@ -307,35 +346,83 @@ export default function DashboardPage() {
     setVoiceEnabled((enabled) => !enabled);
   }
 
-  function startListening() {
-    const Recognition = speechRecognitionConstructor();
-    if (!Recognition) {
+  function stopListening() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }
+
+  async function startListening() {
+    if (!micSupported || !sttReady) {
       setVoiceState("ERROR");
       return;
     }
 
-    recognitionRef.current?.abort?.();
-    const recognition = new Recognition();
-    recognitionRef.current = recognition;
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
 
-    recognition.onstart = () => setVoiceState("LISTENING");
-    recognition.onerror = () => setVoiceState("ERROR");
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      setVoiceState((state) => state === "LISTENING" ? "READY" : state);
-    };
-    recognition.onresult = (event: any) => {
-      const transcript = String(event.results?.[0]?.[0]?.transcript ?? "").trim();
-      if (transcript) {
-        setPrompt(transcript);
-        void processMessage(transcript);
-      }
-    };
+      const mimeType = preferredRecordingMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
-    recognition.start();
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      recorder.onerror = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        recorderRef.current = null;
+        setVoiceState("ERROR");
+      };
+
+      recorder.onstop = () => {
+        const chunks = audioChunksRef.current;
+        const recordedType = recorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(chunks, { type: recordedType });
+
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        recorderRef.current = null;
+        audioChunksRef.current = [];
+
+        if (!blob.size) {
+          setVoiceState("ERROR");
+          return;
+        }
+
+        setVoiceState("TRANSCRIBING");
+        const extension = recordedType.includes("ogg") ? "ogg" : "webm";
+
+        void transcribeAudio(blob, `microphone.${extension}`)
+          .then(async (result) => {
+            const transcript = result.text.trim();
+            if (!transcript) {
+              setVoiceState("READY");
+              return;
+            }
+
+            setPrompt(transcript);
+            setVoiceState("READY");
+            await processMessage(transcript);
+          })
+          .catch(() => setVoiceState("ERROR"));
+      };
+
+      recorder.start();
+      setVoiceState("LISTENING");
+    } catch {
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      recorderRef.current = null;
+      setVoiceState("ERROR");
+    }
   }
 
   const telemetryState = getTelemetryState(overview, overviewError);
@@ -345,6 +432,13 @@ export default function DashboardPage() {
     reactorState === "TOOL_ACTIVE" ||
     reactorState === "THINKING";
   const displayedReactorState = voiceState === "SPEAKING" ? "SPEAKING" : reactorState;
+  const microphoneReady = micSupported && sttReady;
+  const voiceEngineOnline = [
+    "READY",
+    "LISTENING",
+    "TRANSCRIBING",
+    "SPEAKING",
+  ].includes(voiceState);
 
   return (
     <main className="core-shell">
@@ -394,11 +488,31 @@ export default function DashboardPage() {
           <button
             type="button"
             className={`voice-button ${voiceState === "LISTENING" ? "listening" : ""}`}
-            onClick={startListening}
-            disabled={busy || !micSupported}
-            title={micSupported ? "Speak a command" : "Speech recognition is not supported by this browser"}
+            onClick={() => {
+              if (voiceState === "LISTENING") stopListening();
+              else void startListening();
+            }}
+            disabled={
+              busy ||
+              !microphoneReady ||
+              voiceState === "TRANSCRIBING" ||
+              voiceState === "SPEAKING"
+            }
+            title={
+              !micSupported
+                ? "Microphone recording is not supported by this browser"
+                : !sttReady
+                  ? "Local Whisper STT is not ready"
+                  : voiceState === "LISTENING"
+                    ? "Stop recording and transcribe"
+                    : "Record a command with local Whisper"
+            }
           >
-            {voiceState === "LISTENING" ? "● LISTENING" : "🎙 LISTEN"}
+            {voiceState === "LISTENING"
+              ? "■ STOP & TRANSCRIBE"
+              : voiceState === "TRANSCRIBING"
+                ? "… TRANSCRIBING"
+                : "🎙 LISTEN"}
           </button>
           <button
             type="button"
@@ -408,7 +522,8 @@ export default function DashboardPage() {
             {voiceEnabled ? "🔊 VOICE ON" : "🔇 VOICE OFF"}
           </button>
           <div className={`voice-state ${voiceState.toLowerCase()}`}>
-            {voiceProvider} • {voiceState}{!micSupported ? " • MIC STT UNSUPPORTED" : ""}
+            {voiceProvider} + {sttProvider} • {voiceState}
+            {!micSupported ? " • MIC UNSUPPORTED" : !sttReady ? " • STT OFFLINE" : ""}
           </div>
         </div>
 
@@ -436,7 +551,7 @@ export default function DashboardPage() {
         </article>
         <article>
           <span>VOICE ENGINE</span>
-          <strong className={voiceState === "READY" || voiceState === "SPEAKING" ? "online" : ""}>
+          <strong className={voiceEngineOnline ? "online" : ""}>
             {voiceState}
           </strong>
         </article>
