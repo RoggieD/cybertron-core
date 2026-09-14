@@ -1,7 +1,14 @@
 export interface CoreEvent {
+  event_id: string;
   event_type: string;
   timestamp: string;
-  payload: Record<string, unknown>;
+  session_id?: string | null;
+  trace_id?: string | null;
+  parent_event_id?: string | null;
+  actor?: Record<string, unknown> | null;
+  target?: Record<string, unknown> | null;
+  status?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export function connectCoreWebSocket(

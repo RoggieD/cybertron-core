@@ -31,8 +31,10 @@ class EventBus:
         self,
         event: CoreEvent,
     ) -> None:
-        # Persist first so anything shown live is also auditable.
-        await trace_store.save(event)
+        # High-frequency token telemetry is broadcast live but not
+        # synchronously persisted. Lifecycle events remain durable.
+        if event.event_type != "model.token":
+            await trace_store.save(event)
 
         payload = event.model_dump(mode="json")
 

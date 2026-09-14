@@ -361,3 +361,8 @@ footer {
     min-height: 46px;
   }
 }
+
+.trace-id {
+  font-family: monospace;
+  letter-spacing: 0.08em;
+}

@@ -11,6 +11,7 @@ import "./styles.css";
 
 type ReactorState =
   | "IDLE"
+  | "ROUTING"
   | "THINKING"
   | "COMPLETE"
   | "ERROR";
@@ -29,13 +30,48 @@ export default function App() {
   const [evalCount, setEvalCount] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
 
+  const [traceId, setTraceId] = useState<string | null>(null);
+  const [traceEventCount, setTraceEventCount] = useState(0);
+
   useEffect(() => {
     void getHealth()
       .then(() => setApiStatus("ONLINE"))
       .catch(() => setApiStatus("OFFLINE"));
 
     const socket = connectCoreWebSocket(
-      (event) => setLastEvent(event),
+      (event) => {
+        setLastEvent(event);
+
+        if (event.trace_id) {
+          setTraceId(event.trace_id);
+          setTraceEventCount((count) => count + 1);
+        }
+
+        switch (event.event_type) {
+          case "prompt.received":
+            setReactorState("ROUTING");
+            break;
+
+          case "model.request_started":
+          case "model.token":
+            setReactorState("THINKING");
+            break;
+
+          case "model.request_completed":
+            setReactorState("COMPLETE");
+            break;
+
+          case "response.generated":
+            window.setTimeout(() => {
+              setReactorState("IDLE");
+            }, 1200);
+            break;
+
+          case "model.error":
+            setReactorState("ERROR");
+            break;
+        }
+      },
       (connected) => setSocketConnected(connected)
     );
 
@@ -58,7 +94,9 @@ export default function App() {
     setResponseText("");
     setEvalCount(null);
     setDurationMs(null);
-    setReactorState("THINKING");
+    setTraceId(null);
+    setTraceEventCount(0);
+    setReactorState("ROUTING");
 
     try {
       await streamChat(
@@ -93,12 +131,6 @@ export default function App() {
                 streamEvent.total_duration / 1_000_000
               );
             }
-
-            setReactorState("COMPLETE");
-
-            window.setTimeout(() => {
-              setReactorState("IDLE");
-            }, 1800);
           }
 
           if (streamEvent.event === "model.error") {
@@ -190,29 +222,15 @@ export default function App() {
       <section className="status-grid">
         <article>
           <span>CONTROL PLANE</span>
-          <strong
-            className={
-              apiStatus === "ONLINE"
-                ? "online"
-                : ""
-            }
-          >
+          <strong className={apiStatus === "ONLINE" ? "online" : ""}>
             {apiStatus}
           </strong>
         </article>
 
         <article>
           <span>EVENT BUS</span>
-          <strong
-            className={
-              socketConnected
-                ? "online"
-                : ""
-            }
-          >
-            {socketConnected
-              ? "CONNECTED"
-              : "OFFLINE"}
+          <strong className={socketConnected ? "online" : ""}>
+            {socketConnected ? "CONNECTED" : "OFFLINE"}
           </strong>
         </article>
 
@@ -222,17 +240,27 @@ export default function App() {
         </article>
 
         <article>
-          <span>LAST EVENT</span>
+          <span>ACTIVE EVENT</span>
           <strong>
             {lastEvent?.event_type ?? "WAITING"}
           </strong>
         </article>
 
         <article>
-          <span>EVAL TOKENS</span>
-          <strong>
-            {evalCount ?? "—"}
+          <span>TRACE EVENTS</span>
+          <strong>{traceEventCount}</strong>
+        </article>
+
+        <article>
+          <span>TRACE ID</span>
+          <strong className="trace-id">
+            {traceId ? traceId.slice(0, 8) : "—"}
           </strong>
+        </article>
+
+        <article>
+          <span>EVAL TOKENS</span>
+          <strong>{evalCount ?? "—"}</strong>
         </article>
 
         <article>
