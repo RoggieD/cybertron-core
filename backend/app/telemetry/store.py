@@ -84,7 +84,7 @@ def insert_sample(sample: dict) -> None:
 def recent_samples(limit: int = 240) -> list[dict]:
     initialize()
 
-    limit = max(1, min(limit, 5000))
+    limit = max(1, min(limit, 10000))
 
     with _connect() as connection:
         rows = connection.execute(

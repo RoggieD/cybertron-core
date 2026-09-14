@@ -38,6 +38,35 @@ type TelemetrySample = {
   serviceLatency: number;
 };
 
+type TelemetryRange =
+  | "2m"
+  | "15m"
+  | "1h"
+  | "24h";
+
+const TELEMETRY_RANGES = {
+  "2m": {
+    label: "2 MIN",
+    milliseconds: 2 * 60 * 1000,
+    historyLimit: 8
+  },
+  "15m": {
+    label: "15 MIN",
+    milliseconds: 15 * 60 * 1000,
+    historyLimit: 60
+  },
+  "1h": {
+    label: "1 HOUR",
+    milliseconds: 60 * 60 * 1000,
+    historyLimit: 240
+  },
+  "24h": {
+    label: "24 HOUR",
+    milliseconds: 24 * 60 * 60 * 1000,
+    historyLimit: 5760
+  }
+} as const;
+
 function Sparkline({
   values,
   maxValue = 100
@@ -157,37 +186,46 @@ export default function App() {
     useState<Date | null>(null);
   const [telemetryHistory, setTelemetryHistory] =
     useState<TelemetrySample[]>([]);
+  const [telemetryRange, setTelemetryRange] =
+    useState<TelemetryRange>("2m");
 
   useEffect(() => {
     let active = true;
 
-    void getTelemetryHistory(24)
+    const range = TELEMETRY_RANGES[telemetryRange];
+    const cutoff = Date.now() - range.milliseconds;
+
+    void getTelemetryHistory(range.historyLimit)
       .then((history) => {
         if (!active) {
           return;
         }
 
         setTelemetryHistory(
-          history.samples.map((sample) => ({
-            timestamp:
-              new Date(sample.timestamp).getTime(),
-            cpu: sample.cpu_percent,
-            memory: sample.memory_percent,
-            disk: sample.disk_percent,
-            serviceLatency:
-              sample.service_latency_ms
-          }))
+          history.samples
+            .map((sample) => ({
+              timestamp:
+                new Date(sample.timestamp).getTime(),
+              cpu: sample.cpu_percent,
+              memory: sample.memory_percent,
+              disk: sample.disk_percent,
+              serviceLatency:
+                sample.service_latency_ms
+            }))
+            .filter(
+              (sample) => sample.timestamp >= cutoff
+            )
         );
       })
       .catch(() => {
-        // Live telemetry will continue even if
-        // persisted history is temporarily unavailable.
+        // Live telemetry continues if persisted
+        // history is temporarily unavailable.
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [telemetryRange]);
 
   useEffect(() => {
     let active = true;
@@ -220,16 +258,28 @@ export default function App() {
                 ) / latencyValues.length
               : 0;
 
-          setTelemetryHistory((current) => [
-            ...current,
-            {
-              timestamp: Date.now(),
-              cpu: data.system.cpu.usage_percent,
-              memory: data.system.memory.usage_percent,
-              disk: data.system.disk.usage_percent,
-              serviceLatency: averageLatency
-            }
-          ].slice(-24));
+          setTelemetryHistory((current) => {
+            const now = Date.now();
+            const cutoff =
+              now -
+              TELEMETRY_RANGES[telemetryRange]
+                .milliseconds;
+
+            return [
+              ...current,
+              {
+                timestamp: now,
+                cpu: data.system.cpu.usage_percent,
+                memory:
+                  data.system.memory.usage_percent,
+                disk:
+                  data.system.disk.usage_percent,
+                serviceLatency: averageLatency
+              }
+            ].filter(
+              (sample) => sample.timestamp >= cutoff
+            );
+          });
 
           setSelectedService((current) => {
             if (!current) {
@@ -346,7 +396,7 @@ export default function App() {
     return () => {
       socket.close();
     };
-  }, []);
+  }, [telemetryRange]);
 
   async function checkSelectedService() {
     if (!selectedService || manualCheckBusy) {
@@ -668,11 +718,36 @@ export default function App() {
         <div className="trend-header">
           <div>
             <span>ROLLING TELEMETRY</span>
-            <strong>LAST ~2 MINUTES</strong>
+            <strong>
+              {TELEMETRY_RANGES[telemetryRange].label}
+            </strong>
+          </div>
+
+          <div className="trend-controls">
+            {(
+              Object.keys(
+                TELEMETRY_RANGES
+              ) as TelemetryRange[]
+            ).map((range) => (
+              <button
+                type="button"
+                key={range}
+                className={
+                  telemetryRange === range
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setTelemetryRange(range)
+                }
+              >
+                {TELEMETRY_RANGES[range].label}
+              </button>
+            ))}
           </div>
 
           <small>
-            {telemetryHistory.length}/24 SAMPLES
+            {telemetryHistory.length} SAMPLES
           </small>
         </div>
 

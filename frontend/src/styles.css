@@ -1153,3 +1153,44 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+/* Telemetry time-range controls */
+
+.trend-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.trend-controls button {
+  appearance: none;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  padding: 6px 9px;
+  cursor: pointer;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.trend-controls button:hover {
+  border-color: rgba(0, 255, 255, 0.55);
+}
+
+.trend-controls button.active {
+  border-color: currentColor;
+  background: rgba(0, 255, 255, 0.08);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.18);
+}
+
+@media (max-width: 700px) {
+  .trend-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
