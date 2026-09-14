@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const repoRoot = path.resolve(__dirname, "..");
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(configDir, "..");
 const certFile = path.join(repoRoot, "certs", "cybertron-core.pem");
 const keyFile = path.join(repoRoot, "certs", "cybertron-core-key.pem");
 
