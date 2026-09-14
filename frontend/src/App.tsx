@@ -6,6 +6,7 @@ import {
   getServiceStatus,
   getTelemetryHistory,
   getIncidents,
+  acknowledgeIncident,
   type StatusOverview,
   type ServiceHealthItem,
   type IncidentEvent
@@ -193,6 +194,8 @@ export default function App() {
   const [incidents, setIncidents] =
     useState<IncidentEvent[]>([]);
   const [activeIncidentIds, setActiveIncidentIds] =
+    useState<string[]>([]);
+  const [acknowledgedIncidentIds, setAcknowledgedIncidentIds] =
     useState<string[]>([]);
   const [incidentFilter, setIncidentFilter] =
     useState<"all" | "opened" | "resolved">("all");
@@ -418,6 +421,9 @@ export default function App() {
         if (active) {
           setIncidents(data.incidents);
           setActiveIncidentIds(data.active);
+          setAcknowledgedIncidentIds(
+            data.acknowledged ?? []
+          );
         }
       } catch {
         // Incident display should never break the main UI.
@@ -436,6 +442,28 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, []);
+
+  async function acknowledgeActiveIncident(
+    incidentId: string
+  ) {
+    try {
+      const result = await acknowledgeIncident(
+        incidentId
+      );
+
+      if (result.ok) {
+        const data = await getIncidents(50);
+
+        setIncidents(data.incidents);
+        setActiveIncidentIds(data.active);
+        setAcknowledgedIncidentIds(
+          data.acknowledged ?? []
+        );
+      }
+    } catch {
+      // Incident polling will recover UI state.
+    }
+  }
 
   async function checkSelectedService() {
     if (!selectedService || manualCheckBusy) {
@@ -880,9 +908,42 @@ export default function App() {
                 >
                   <div className="incident-item-header">
                     <strong>{incident.title}</strong>
-                    <span>
-                      {incident.state.toUpperCase()}
-                    </span>
+
+                    <div className="incident-item-actions">
+                      <span>
+                        {incident.state.toUpperCase()}
+                      </span>
+
+                      {incident.state === "opened" &&
+                        activeIncidentIds.includes(
+                          incident.id
+                        ) &&
+                        !acknowledgedIncidentIds.includes(
+                          incident.id
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void acknowledgeActiveIncident(
+                                incident.id
+                              )
+                            }
+                          >
+                            ACKNOWLEDGE
+                          </button>
+                        )}
+
+                      {activeIncidentIds.includes(
+                        incident.id
+                      ) &&
+                        acknowledgedIncidentIds.includes(
+                          incident.id
+                        ) && (
+                          <span className="incident-ack-badge">
+                            ACKNOWLEDGED
+                          </span>
+                        )}
+                    </div>
                   </div>
 
                   <p>{incident.message}</p>

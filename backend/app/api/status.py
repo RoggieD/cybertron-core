@@ -40,6 +40,7 @@ async def status_incidents(
     state: str | None = None,
 ) -> dict:
     from backend.app.telemetry.incidents import (
+        acknowledged_incident_ids,
         active_incident_ids,
         recent_incidents,
     )
@@ -52,6 +53,7 @@ async def status_incidents(
 
     return {
         "active": active_incident_ids(),
+        "acknowledged": acknowledged_incident_ids(),
         "count": len(incidents),
         "filters": {
             "severity": severity,
@@ -59,3 +61,14 @@ async def status_incidents(
         },
         "incidents": incidents,
     }
+
+
+@router.post("/incidents/{incident_id}/acknowledge")
+async def acknowledge_status_incident(
+    incident_id: str,
+) -> dict:
+    from backend.app.telemetry.incidents import (
+        acknowledge_incident,
+    )
+
+    return acknowledge_incident(incident_id)

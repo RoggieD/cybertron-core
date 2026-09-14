@@ -1381,3 +1381,39 @@ footer {
     flex-direction: column;
   }
 }
+
+/* Incident acknowledgement */
+
+.incident-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.incident-item-actions button {
+  appearance: none;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 4px 7px;
+  cursor: pointer;
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+}
+
+.incident-item-actions button:hover {
+  box-shadow: 0 0 8px currentColor;
+}
+
+.incident-ack-badge {
+  color: #64ffd8;
+  border: 1px solid currentColor;
+  padding: 3px 6px;
+  font-size: 0.5rem !important;
+  letter-spacing: 0.1em;
+}
+
+.incident-acknowledged {
+  color: #64ffd8;
+  opacity: 0.85;
+}

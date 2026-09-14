@@ -143,6 +143,7 @@ export type IncidentEvent = {
 
 export type IncidentResponse = {
   active: string[];
+  acknowledged: string[];
   count: number;
   incidents: IncidentEvent[];
 };
@@ -159,6 +160,35 @@ export async function getIncidents(
   if (!response.ok) {
     throw new Error(
       `Incident API returned ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function acknowledgeIncident(
+  incidentId: string
+): Promise<{
+  ok: boolean;
+  already_acknowledged?: boolean;
+  reason?: string;
+  incident_id: string;
+}> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/incidents/${encodeURIComponent(
+      incidentId
+    )}/acknowledge`,
+    {
+      method: "POST"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Incident acknowledgment returned ${response.status}`
     );
   }
 
