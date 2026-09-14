@@ -221,6 +221,15 @@ def render_verified_tool_result(
         return render_system_overview(result)
 
     if tool_id == "incident.summary":
+        if result.get("mode") in {
+            "time_window",
+            "since_midnight",
+            "today",
+        }:
+            return render_incident_time_summary(
+                result
+            )
+
         return render_incident_summary_query_aware(
             result
         )
@@ -795,6 +804,64 @@ def render_incident_summary_query_aware(
     result: dict,
 ) -> str:
     mode = result.get("mode", "recent")
+
+    if mode in {
+        "time_window",
+        "since_midnight",
+        "today",
+    }:
+        hours = result.get("hours")
+        severity = result.get(
+            "severity_filter"
+        )
+        events = result.get("recent") or []
+
+        if mode == "time_window":
+            title = (
+                f"INCIDENTS — LAST {hours} "
+                "HOUR(S) — VERIFIED"
+            )
+        elif mode == "since_midnight":
+            title = (
+                "INCIDENTS — SINCE MIDNIGHT "
+                "— VERIFIED"
+            )
+        else:
+            title = (
+                "INCIDENTS — TODAY — VERIFIED"
+            )
+
+        lines = [
+            title,
+            "",
+            f"Events found: {len(events)}",
+        ]
+
+        if severity:
+            lines.append(
+                f"Severity filter: "
+                f"{severity.upper()}"
+            )
+
+        lines.append("")
+
+        if not events:
+            lines.append(
+                "No matching incidents found."
+            )
+
+            return "\n".join(lines)
+
+        for item in events[-50:]:
+            lines.append(
+                f"- "
+                f"{str(item.get('state', '?')).upper()} | "
+                f"{str(item.get('severity', '?')).upper()} | "
+                f"{item.get('id')} | "
+                f"{item.get('message', '')}"
+            )
+
+        return "\n".join(lines)
     analytics = result.get("analytics") or {}
     recent = result.get("recent") or []
 
@@ -863,3 +930,93 @@ def render_incident_summary_query_aware(
         )
 
     return "\n".join(lines)
+
+
+def render_incident_time_summary(
+    result: dict,
+) -> str:
+    mode = result.get("mode")
+    hours = result.get("hours")
+    severity = result.get("severity_filter")
+    events = result.get("recent") or []
+
+    if mode == "time_window":
+        title = f"INCIDENTS — LAST {hours} HOUR(S) — VERIFIED"
+    elif mode == "since_midnight":
+        title = "INCIDENTS — SINCE MIDNIGHT — VERIFIED"
+    elif mode == "today":
+        title = "INCIDENTS — TODAY — VERIFIED"
+    else:
+        return render_incident_summary_query_aware(result)
+
+    lines = [
+        title,
+        "",
+        f"Events found: {len(events)}",
+    ]
+
+    if severity:
+        lines.append(
+            f"Severity filter: {severity.upper()}"
+        )
+
+    lines.append("")
+
+    if not events:
+        lines.append("No matching incidents found.")
+        return "\\n".join(lines)
+
+    for item in events[-50:]:
+        lines.append(
+            f"- {str(item.get('state', '?')).upper()} | "
+            f"{str(item.get('severity', '?')).upper()} | "
+            f"{item.get('id')} | "
+            f"{item.get('message', '')}"
+        )
+
+    return "\\n".join(lines)
+
+
+def render_incident_time_summary(
+    result: dict,
+) -> str:
+    mode = result.get("mode")
+    hours = result.get("hours")
+    severity = result.get("severity_filter")
+    events = result.get("recent") or []
+
+    if mode == "time_window":
+        title = f"INCIDENTS — LAST {hours} HOUR(S) — VERIFIED"
+    elif mode == "since_midnight":
+        title = "INCIDENTS — SINCE MIDNIGHT — VERIFIED"
+    elif mode == "today":
+        title = "INCIDENTS — TODAY — VERIFIED"
+    else:
+        return render_incident_summary_query_aware(result)
+
+    lines = [
+        title,
+        "",
+        f"Events found: {len(events)}",
+    ]
+
+    if severity:
+        lines.append(
+            f"Severity filter: {severity.upper()}"
+        )
+
+    lines.append("")
+
+    if not events:
+        lines.append("No matching incidents found.")
+        return "\\n".join(lines)
+
+    for item in events[-50:]:
+        lines.append(
+            f"- {str(item.get('state', '?')).upper()} | "
+            f"{str(item.get('severity', '?')).upper()} | "
+            f"{item.get('id')} | "
+            f"{item.get('message', '')}"
+        )
+
+    return "\\n".join(lines)

@@ -651,3 +651,105 @@ def incident_analytics() -> dict:
             for row in recurring_rows
         ],
     }
+
+
+def incidents_since(
+    since: datetime,
+    severity: str | None = None,
+    limit: int = 500,
+) -> list[dict]:
+    initialize()
+
+    query = """
+        SELECT
+            incident_id,
+            severity,
+            title,
+            message,
+            state,
+            timestamp,
+            value,
+            threshold
+        FROM incidents
+        WHERE timestamp >= ?
+    """
+
+    params: list = [since.isoformat()]
+
+    if severity:
+        query += " AND severity = ?"
+        params.append(severity.lower())
+
+    query += " ORDER BY id ASC LIMIT ?"
+    params.append(max(1, min(limit, 2000)))
+
+    with _connect() as connection:
+        rows = connection.execute(
+            query,
+            tuple(params),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in rows
+    ]
+
+
+def incidents_since(
+    since: datetime,
+    severity: str | None = None,
+    limit: int = 500,
+) -> list[dict]:
+    initialize()
+
+    query = """
+        SELECT
+            incident_id,
+            severity,
+            title,
+            message,
+            state,
+            timestamp,
+            value,
+            threshold
+        FROM incidents
+        WHERE timestamp >= ?
+    """
+
+    params: list = [since.isoformat()]
+
+    if severity:
+        query += " AND severity = ?"
+        params.append(severity.lower())
+
+    query += " ORDER BY id ASC LIMIT ?"
+    params.append(max(1, min(limit, 2000)))
+
+    with _connect() as connection:
+        rows = connection.execute(
+            query,
+            tuple(params),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in rows
+    ]

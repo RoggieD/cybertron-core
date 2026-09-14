@@ -57,6 +57,39 @@ def select_tool(
         return "system.snapshot", {}
 
     if agent.id == "infrastructure":
+        incident_hours = extract_incident_hours(
+            message
+        )
+
+        incident_severity = (
+            "critical"
+            if "critical" in normalized
+            else None
+        )
+
+        if incident_hours is not None:
+            return "incident.summary", {
+                "mode": "time_window",
+                "hours": incident_hours,
+                "severity": incident_severity,
+            }
+
+        if "since midnight" in normalized:
+            return "incident.summary", {
+                "mode": "since_midnight",
+                "severity": incident_severity,
+            }
+
+        if (
+            "what failed today" in normalized
+            or "incidents today" in normalized
+            or "incident today" in normalized
+        ):
+            return "incident.summary", {
+                "mode": "today",
+                "severity": incident_severity,
+            }
+
         if any(
             phrase in normalized
             for phrase in (
@@ -66,8 +99,42 @@ def select_tool(
                 "failures",
                 "overnight",
                 "usually last",
+                "last hour",
+                "past hour",
+                "last 24 hours",
+                "since midnight",
+                "today",
+                "what happened",
+                "what failed",
             )
         ):
+            hours = extract_incident_hours(message)
+
+            severity = (
+                "critical"
+                if "critical" in normalized
+                else None
+            )
+
+            if hours is not None:
+                return "incident.summary", {
+                    "mode": "time_window",
+                    "hours": hours,
+                    "severity": severity,
+                }
+
+            if "since midnight" in normalized:
+                return "incident.summary", {
+                    "mode": "since_midnight",
+                    "severity": severity,
+                }
+
+            if "today" in normalized:
+                return "incident.summary", {
+                    "mode": "today",
+                    "severity": severity,
+                }
+
             if (
                 "critical" in normalized
                 or "critical only" in normalized
@@ -264,3 +331,28 @@ def extract_url(message: str) -> str | None:
         return None
 
     return match.group(0).rstrip(".,);]}")
+
+def extract_incident_hours(
+    message: str,
+) -> int | None:
+    normalized = message.lower()
+
+    match = re.search(
+        r"\b(?:last|past)\s+(\d+)\s+(?:hours?|hrs?)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+
+    if match:
+        return max(
+            1,
+            min(int(match.group(1)), 168),
+        )
+
+    if (
+        "last hour" in normalized
+        or "past hour" in normalized
+    ):
+        return 1
+
+    return None
