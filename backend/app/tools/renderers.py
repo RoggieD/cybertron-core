@@ -217,6 +217,9 @@ def render_verified_tool_result(
     if tool_id == "service.status":
         return render_service_status(result)
 
+    if tool_id == "system.overview":
+        return render_system_overview(result)
+
     return None
 
 
@@ -316,6 +319,9 @@ def should_return_verified_only(
         return True
 
     if tool_id == "service.status":
+        return True
+
+    if tool_id == "system.overview":
         return True
 
     return False
@@ -668,5 +674,60 @@ def render_service_status(result: dict) -> str:
 
         if error:
             lines.append(f"  Error: {error}")
+
+    return "\n".join(lines)
+
+
+def render_system_overview(result: dict) -> str:
+    system = result.get("system") or {}
+    docker = result.get("docker") or {}
+    services = result.get("services") or {}
+    network = result.get("network") or {}
+
+    cpu = system.get("cpu") or {}
+    memory = system.get("memory") or {}
+    disk = system.get("disk") or {}
+
+    uptime_seconds = int(system.get("uptime_seconds") or 0)
+    uptime_hours = uptime_seconds / 3600
+
+    lines = [
+        "SYSTEM OVERVIEW — VERIFIED",
+        "",
+        f"Host: {system.get('hostname', 'unknown')}",
+        f"Platform: {system.get('platform', 'unknown')}",
+        "",
+        "System:",
+        f"- CPU usage: {cpu.get('usage_percent', 'unknown')}%",
+        (
+            f"- CPU cores: "
+            f"{cpu.get('physical_cores', 'unknown')} physical / "
+            f"{cpu.get('logical_cores', 'unknown')} logical"
+        ),
+        (
+            f"- Memory usage: "
+            f"{memory.get('usage_percent', 'unknown')}%"
+        ),
+        (
+            f"- Disk usage: "
+            f"{disk.get('usage_percent', 'unknown')}%"
+        ),
+        f"- Uptime: {uptime_hours:.2f} hours",
+        "",
+        "Docker:",
+        f"- Containers: {docker.get('total', 0)}",
+        f"- Running: {docker.get('running', 0)}",
+        "",
+        "Services:",
+        (
+            f"- Healthy: "
+            f"{services.get('reachable', 0)}/"
+            f"{services.get('total', 0)}"
+        ),
+        f"- Unreachable: {services.get('unreachable', 0)}",
+        "",
+        "Network:",
+        f"- Listening sockets: {network.get('listeners', 0)}",
+    ]
 
     return "\n".join(lines)

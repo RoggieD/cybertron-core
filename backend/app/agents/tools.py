@@ -29,6 +29,21 @@ def select_tool(
     normalized = message.lower()
 
     if agent.id == "system":
+        overview_phrases = (
+            "system overview",
+            "status report",
+            "core status",
+            "c.o.r.e. status",
+            "cybertron doing",
+            "how is cybertron",
+        )
+
+        if any(
+            phrase in normalized
+            for phrase in overview_phrases
+        ):
+            return "system.overview", {}
+
         process_terms = (
             "process",
             "processes",

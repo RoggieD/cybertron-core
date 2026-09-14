@@ -1,3 +1,4 @@
+from backend.app.tools.overview import system_overview
 from backend.app.tools.services import service_status
 from backend.app.tools.reachability import network_reachability
 from backend.app.tools.base import ToolDefinition
@@ -37,6 +38,17 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=port_owner,
+    ),
+    "system.overview": ToolDefinition(
+        id="system.overview",
+        name="System Overview",
+        description=(
+            "Read-only consolidated system, Docker, "
+            "service, and network status."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=system_overview,
     ),
     "service.status": ToolDefinition(
         id="service.status",
