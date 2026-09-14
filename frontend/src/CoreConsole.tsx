@@ -16,6 +16,7 @@ const CognitionGraph = lazy(
 );
 
 function pageFromPath(pathname: string): CorePage {
+  if (pathname.startsWith("/processing")) return "processing";
   if (pathname.startsWith("/systems")) return "systems";
   if (pathname.startsWith("/services")) return "services";
   if (pathname.startsWith("/incidents")) return "incidents";
@@ -25,6 +26,7 @@ function pageFromPath(pathname: string): CorePage {
 
 const PAGE_TITLES: Record<CorePage, string> = {
   dashboard: "Dashboard",
+  processing: "Processing",
   systems: "Systems",
   services: "Services",
   incidents: "Incidents",
@@ -67,18 +69,29 @@ export default function CoreConsole() {
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
 
-      {page === "dashboard" && (
-        <div className="core-dashboard-graph">
-          <Suspense
-            fallback={
-              <div className="core-graph-loading">
-                INITIALIZING COGNITION MAP…
-              </div>
-            }
-          >
-            <CognitionGraph />
-          </Suspense>
-        </div>
+      {page === "processing" && (
+        <section className="core-processing-page">
+          <div className="core-processing-heading">
+            <span>LIVE ORCHESTRATION</span>
+            <h1>Processing Graph</h1>
+            <p>
+              Real-time cognition flow across routing, agents, memory,
+              tools, and the active model.
+            </p>
+          </div>
+
+          <div className="core-processing-graph">
+            <Suspense
+              fallback={
+                <div className="core-graph-loading">
+                  INITIALIZING COGNITION MAP…
+                </div>
+              }
+            >
+              <CognitionGraph />
+            </Suspense>
+          </div>
+        </section>
       )}
 
       <App />
