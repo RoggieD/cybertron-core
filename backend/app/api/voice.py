@@ -1,3 +1,6 @@
+import asyncio
+import subprocess
+
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -15,18 +18,59 @@ class SpeechRequest(BaseModel):
     voice: str | None = None
 
 
+def _discover_kokoro_base_url_sync() -> tuple[str, str]:
+    """Resolve Kokoro without depending on a Docker-assigned IP.
+
+    Prefer an explicitly configured base URL when it is reachable. If it is not,
+    inspect the named local container and build a URL from its current Docker IP.
+    This keeps voice working across container restarts where the bridge address
+    can change.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{range.NetworkSettings.Networks}}{{.IPAddress}} {{end}}",
+                settings.kokoro_container_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+            check=True,
+        )
+        addresses = [item.strip() for item in result.stdout.split() if item.strip()]
+        if addresses:
+            return (
+                f"http://{addresses[0]}:{settings.kokoro_container_port}/v1",
+                "docker-discovery",
+            )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        pass
+
+    return settings.kokoro_base_url.rstrip("/"), "configured"
+
+
+async def _kokoro_base_url() -> tuple[str, str]:
+    return await asyncio.to_thread(_discover_kokoro_base_url_sync)
+
+
 @router.get("/status")
 async def voice_status() -> dict:
+    base_url, source = await _kokoro_base_url()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{settings.kokoro_base_url}/models")
+            response = await client.get(f"{base_url}/models")
         reachable = response.status_code < 500
     except httpx.HTTPError:
         reachable = False
 
     return {
         "provider": "kokoro-fastapi",
-        "base_url": settings.kokoro_base_url,
+        "base_url": base_url,
+        "endpoint_source": source,
+        "container": settings.kokoro_container_name,
         "default_voice": settings.kokoro_voice,
         "reachable": reachable,
     }
@@ -34,6 +78,7 @@ async def voice_status() -> dict:
 
 @router.post("/speech")
 async def synthesize_speech(request: SpeechRequest) -> Response:
+    base_url, _ = await _kokoro_base_url()
     payload = {
         "model": settings.kokoro_model,
         "input": request.text,
@@ -44,7 +89,7 @@ async def synthesize_speech(request: SpeechRequest) -> Response:
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
-                f"{settings.kokoro_base_url}/audio/speech",
+                f"{base_url}/audio/speech",
                 json=payload,
                 headers={"Authorization": "Bearer not-needed"},
             )
