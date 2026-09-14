@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.app.security_policy import security_policy_store
+from backend.app.tools.listeners import listener_inventory
 
 
 router = APIRouter(prefix="/api/security", tags=["security"])
@@ -15,6 +16,15 @@ class ApproveLearnedRequest(BaseModel):
 @router.get("/policy/{hostname}")
 async def get_security_policy(hostname: str) -> dict:
     return await security_policy_store.status(hostname)
+
+
+@router.get("/policy/{hostname}/evaluate")
+async def evaluate_security_policy(hostname: str) -> dict:
+    listeners = await listener_inventory()
+    return await security_policy_store.evaluate(
+        hostname,
+        listeners.get("listeners", []),
+    )
 
 
 @router.post("/policy/{hostname}/approve-learned")
