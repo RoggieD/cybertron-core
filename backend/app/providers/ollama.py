@@ -26,11 +26,12 @@ class OllamaProvider(ModelProvider):
             "stream": stream,
             # Keep the reply in message.content for the C.O.R.E. UI.
             "think": False,
-            # Security/posture reports can be longer than Ollama's default
-            # generation budget. Make the response budget explicit and
-            # configurable so reports do not stop in the middle of a sentence.
+            # Long defensive reports need room for both evidence-rich prompts
+            # and the generated answer. num_predict alone is insufficient if
+            # the runtime context window is too small.
             "options": {
                 "num_predict": self.settings.ollama_num_predict,
+                "num_ctx": self.settings.ollama_num_ctx,
             },
         }
 
