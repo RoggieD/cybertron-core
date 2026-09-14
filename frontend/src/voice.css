@@ -82,12 +82,10 @@
 
 .voice-agent-3d {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
   width: 270px;
   height: 330px;
   z-index: 40;
-  pointer-events: none;
+  pointer-events: auto;
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.62)),
@@ -111,6 +109,17 @@
   opacity: 0.88;
 }
 
+.voice-agent-drag-handle {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.voice-agent-drag-handle:active,
+body.voice-agent-dragging {
+  cursor: grabbing;
+}
+
 .voice-agent-heading strong {
   font-size: 0.58rem;
   font-weight: 600;
@@ -121,6 +130,7 @@
 .voice-agent-canvas {
   position: absolute;
   inset: 32px 0 34px 0;
+  pointer-events: none;
 }
 
 .voice-agent-canvas canvas {
@@ -141,6 +151,7 @@
   font-size: 0.52rem;
   letter-spacing: 0.1em;
   opacity: 0.68;
+  pointer-events: none;
 }
 
 .voice-agent-caption i {
@@ -212,11 +223,15 @@
 @media (max-width: 900px) {
   .voice-agent-3d {
     position: relative;
-    right: auto;
-    bottom: auto;
+    left: auto !important;
+    top: auto !important;
     width: min(100% - 24px, 420px);
     height: 300px;
     margin: 12px auto 20px;
+  }
+
+  .voice-agent-drag-handle {
+    cursor: default;
   }
 }
 
