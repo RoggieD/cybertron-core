@@ -41,6 +41,26 @@ class SecurityBaselineStore:
                 ON security_snapshots(generated_at)
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_expected_public_listeners (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hostname TEXT NOT NULL,
+                    endpoint TEXT NOT NULL,
+                    address TEXT NOT NULL,
+                    port INTEGER NOT NULL,
+                    first_observed_at TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'learned-baseline',
+                    UNIQUE(hostname, endpoint)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_security_expected_public_listeners_host
+                ON security_expected_public_listeners(hostname)
+                """
+            )
             connection.commit()
 
     @staticmethod
@@ -110,6 +130,107 @@ class SecurityBaselineStore:
                 ),
             )
             connection.commit()
+
+    def _expected_public_listener_rows_sync(self, hostname: str) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT endpoint, address, port, first_observed_at, source
+                FROM security_expected_public_listeners
+                WHERE hostname = ?
+                ORDER BY port, address
+                """,
+                (hostname,),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def _seed_expected_public_listeners_sync(
+        self,
+        hostname: str,
+        generated_at: str,
+        listeners: list[dict],
+    ) -> None:
+        with self._connect() as connection:
+            for listener in listeners:
+                address = str(listener.get("address") or "?")
+                if address not in PUBLIC_BIND_ADDRESSES:
+                    continue
+                port = int(listener.get("port") or 0)
+                endpoint = self._listener_endpoint(listener)
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO security_expected_public_listeners (
+                        hostname,
+                        endpoint,
+                        address,
+                        port,
+                        first_observed_at,
+                        source
+                    ) VALUES (?, ?, ?, ?, ?, 'learned-baseline')
+                    """,
+                    (hostname, endpoint, address, port, generated_at),
+                )
+            connection.commit()
+
+    async def compare_expected_public_listeners(
+        self,
+        hostname: str | None,
+        generated_at: str,
+        listeners: list[dict],
+    ) -> dict:
+        if not hostname:
+            return {
+                "configured": False,
+                "initialized_now": False,
+                "mode": "unavailable",
+                "expected_public_listener_endpoints": [],
+                "unexpected_public_listener_endpoints": [],
+                "missing_expected_public_listener_endpoints": [],
+            }
+
+        current_public = {
+            self._listener_endpoint(listener)
+            for listener in listeners
+            if listener.get("address") in PUBLIC_BIND_ADDRESSES
+        }
+
+        async with self._lock:
+            rows = await asyncio.to_thread(
+                self._expected_public_listener_rows_sync,
+                hostname,
+            )
+            initialized_now = False
+            if not rows:
+                await asyncio.to_thread(
+                    self._seed_expected_public_listeners_sync,
+                    hostname,
+                    generated_at,
+                    listeners,
+                )
+                rows = await asyncio.to_thread(
+                    self._expected_public_listener_rows_sync,
+                    hostname,
+                )
+                initialized_now = True
+
+        expected = {row["endpoint"] for row in rows}
+
+        return {
+            "configured": bool(rows),
+            "initialized_now": initialized_now,
+            "mode": "learned-baseline",
+            "baseline_source": "first observed public listener set",
+            "expected_public_listener_count": len(expected),
+            "current_public_listener_count": len(current_public),
+            "expected_public_listener_endpoints": sorted(expected),
+            "unexpected_public_listener_endpoints": sorted(current_public - expected),
+            "missing_expected_public_listener_endpoints": sorted(expected - current_public),
+            "note": (
+                "This is an expected-state baseline learned from the first observation, "
+                "not an administrator-approved allowlist."
+            ),
+        }
 
     @classmethod
     def _compare(cls, previous: dict | None, current: dict) -> dict:
