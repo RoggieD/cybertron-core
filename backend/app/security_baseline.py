@@ -10,6 +10,11 @@ PUBLIC_BIND_ADDRESSES = {
     "::0",
 }
 
+LOOPBACK_ADDRESSES = {
+    "127.0.0.1",
+    "::1",
+}
+
 
 class SecurityBaselineStore:
     def __init__(self, database_path: str = "data/cybertron.db") -> None:
@@ -240,10 +245,15 @@ class SecurityBaselineStore:
                 "baseline_at": None,
                 "changed": False,
                 "security_relevant_change": False,
+                "operational_state_change": False,
                 "new_listener_endpoints": [],
                 "removed_listener_endpoints": [],
                 "new_public_listener_endpoints": [],
                 "removed_public_listener_endpoints": [],
+                "new_non_loopback_listener_endpoints": [],
+                "removed_non_loopback_listener_endpoints": [],
+                "new_loopback_listener_endpoints": [],
+                "removed_loopback_listener_endpoints": [],
                 "listener_owner_changes": [],
                 "new_process_names": [],
                 "removed_process_names": [],
@@ -270,6 +280,26 @@ class SecurityBaselineStore:
             endpoint
             for endpoint in removed_endpoints
             if previous_listener_map[endpoint].get("address") in PUBLIC_BIND_ADDRESSES
+        ]
+        new_loopback_endpoints = [
+            endpoint
+            for endpoint in new_endpoints
+            if current_listener_map[endpoint].get("address") in LOOPBACK_ADDRESSES
+        ]
+        removed_loopback_endpoints = [
+            endpoint
+            for endpoint in removed_endpoints
+            if previous_listener_map[endpoint].get("address") in LOOPBACK_ADDRESSES
+        ]
+        new_non_loopback_endpoints = [
+            endpoint
+            for endpoint in new_endpoints
+            if current_listener_map[endpoint].get("address") not in LOOPBACK_ADDRESSES
+        ]
+        removed_non_loopback_endpoints = [
+            endpoint
+            for endpoint in removed_endpoints
+            if previous_listener_map[endpoint].get("address") not in LOOPBACK_ADDRESSES
         ]
 
         owner_changes = []
@@ -300,28 +330,39 @@ class SecurityBaselineStore:
         previous_score = int(previous_snapshot.get("attention_score") or 0)
         current_score = int(current.get("attention_score") or 0)
         posture_changed = previous_snapshot.get("posture") != current.get("posture")
+        score_changed = previous_score != current_score
 
+        # A security-relevant change is now limited to listener exposure drift
+        # outside loopback. Process churn, ownership visibility changes, score
+        # movement, and posture movement remain observable context but do not by
+        # themselves imply a security event.
         security_relevant_change = bool(
-            new_endpoints
-            or removed_endpoints
-            or posture_changed
-            or previous_score != current_score
+            new_non_loopback_endpoints or removed_non_loopback_endpoints
         )
+        operational_state_change = bool(score_changed or posture_changed)
 
         return {
             "has_previous_baseline": True,
             "baseline_at": previous.get("generated_at"),
             "changed": bool(
                 security_relevant_change
+                or operational_state_change
+                or new_loopback_endpoints
+                or removed_loopback_endpoints
                 or owner_changes
                 or new_process_names
                 or removed_process_names
             ),
             "security_relevant_change": security_relevant_change,
+            "operational_state_change": operational_state_change,
             "new_listener_endpoints": new_endpoints[:50],
             "removed_listener_endpoints": removed_endpoints[:50],
             "new_public_listener_endpoints": new_public_endpoints[:50],
             "removed_public_listener_endpoints": removed_public_endpoints[:50],
+            "new_non_loopback_listener_endpoints": new_non_loopback_endpoints[:50],
+            "removed_non_loopback_listener_endpoints": removed_non_loopback_endpoints[:50],
+            "new_loopback_listener_endpoints": new_loopback_endpoints[:50],
+            "removed_loopback_listener_endpoints": removed_loopback_endpoints[:50],
             "listener_owner_changes": owner_changes[:50],
             "new_process_names": new_process_names[:50],
             "removed_process_names": removed_process_names[:50],
@@ -332,6 +373,10 @@ class SecurityBaselineStore:
             "context_only": {
                 "process_churn": bool(new_process_names or removed_process_names),
                 "owner_visibility_changed": bool(owner_changes),
+                "loopback_listener_churn": bool(
+                    new_loopback_endpoints or removed_loopback_endpoints
+                ),
+                "score_or_posture_drift": operational_state_change,
             },
         }
 
