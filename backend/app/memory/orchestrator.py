@@ -643,6 +643,66 @@ class MemoryWriteOrchestrator:
 
         return result
 
+    def list_proposals(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        sql = """
+            SELECT *
+            FROM memory_proposals
+            WHERE 1 = 1
+        """
+
+        params: list[Any] = []
+
+        if status:
+            normalized_status = (
+                status.strip().lower()
+            )
+
+            if normalized_status not in {
+                "pending",
+                "committed",
+                "rejected",
+            }:
+                raise ValueError(
+                    "Invalid proposal status: "
+                    f"{status}"
+                )
+
+            sql += """
+                AND status = ?
+            """
+
+            params.append(
+                normalized_status
+            )
+
+        sql += """
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+
+        params.append(
+            max(
+                1,
+                min(limit, 500),
+            )
+        )
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                sql,
+                tuple(params),
+            ).fetchall()
+
+        return [
+            self._row_to_proposal(row)
+            for row in rows
+        ]
+
     def audit_history(
         self,
         proposal_id: str,

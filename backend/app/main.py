@@ -6,6 +6,7 @@ from backend.app.api.models import router as models_router
 from backend.app.api.traces import router as traces_router
 from backend.app.api.status import router as status_router
 from backend.app.api.websocket import router as websocket_router
+from backend.app.api.memory import router as memory_router
 from backend.app.core.config import get_settings
 from backend.app.telemetry.sampler import (
     start_sampler,
@@ -25,9 +26,8 @@ app.include_router(chat_router)
 app.include_router(models_router)
 app.include_router(traces_router)
 app.include_router(status_router)
+app.include_router(memory_router)
 app.include_router(websocket_router)
-
-
 @app.on_event("startup")
 async def telemetry_startup() -> None:
     await start_sampler()
@@ -47,3 +47,5 @@ async def root() -> dict:
         "websocket": "/ws",
         "docs": "/docs",
     }
+
+# C.O.R.E. Memory Approval API
