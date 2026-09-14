@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 
+from backend.app.security_baseline import security_baseline_store
 from backend.app.tools.listeners import listener_inventory
 from backend.app.tools.processes import process_inventory
 from backend.app.tools.system import system_snapshot
@@ -23,12 +24,12 @@ def _severity_rank(value: str) -> int:
 
 
 async def security_snapshot() -> dict:
-    """Build a deterministic, read-only defensive posture snapshot.
+    """Build a deterministic, local defensive posture snapshot.
 
-    This intentionally performs local observation only. It does not probe
-    external systems, exploit services, alter firewall state, or make claims
-    about compromise. Findings are evidence-backed observations that can be
-    used by the Security Agent and provenance graph.
+    Observation is read-only with respect to the host. C.O.R.E. records the
+    snapshot as defensive telemetry so later assessments can detect changes in
+    listeners, process names, attention score, and posture. It does not probe
+    external systems, exploit services, or alter host configuration.
     """
 
     system, listeners, processes = await asyncio.gather(
@@ -160,29 +161,74 @@ async def security_snapshot() -> dict:
     else:
         posture = "baseline"
 
+    generated_at = datetime.now(timezone.utc).isoformat()
+    evidence = {
+        "hostname": system.get("hostname"),
+        "listener_count": listeners.get("count", 0),
+        "public_listener_count": len(public_listeners),
+        "unknown_owner_listener_count": len(unknown_owner_listeners),
+        "process_count": processes.get("count", 0),
+        "returned_process_count": processes.get("returned", 0),
+        "cpu_usage_percent": cpu_percent,
+        "memory_usage_percent": memory_percent,
+        "disk_usage_percent": disk_percent,
+    }
+
+    telemetry_record = {
+        "generated_at": generated_at,
+        "posture": posture,
+        "attention_score": score,
+        "evidence": evidence,
+        "raw_evidence": {
+            "listeners": listeners.get("listeners", []),
+            "processes": processes.get("processes", []),
+        },
+    }
+
+    baseline_comparison = await security_baseline_store.compare_and_record(
+        telemetry_record
+    )
+
+    if baseline_comparison.get("has_previous_baseline") and baseline_comparison.get("changed"):
+        findings.insert(
+            0,
+            {
+                "id": "baseline-change",
+                "severity": "medium"
+                if baseline_comparison.get("new_listeners")
+                else "low",
+                "category": "change-detection",
+                "title": "Security-relevant host state changed since prior snapshot",
+                "evidence_count": (
+                    len(baseline_comparison.get("new_listeners", []))
+                    + len(baseline_comparison.get("removed_listeners", []))
+                    + len(baseline_comparison.get("new_process_names", []))
+                    + len(baseline_comparison.get("removed_process_names", []))
+                ),
+                "evidence": baseline_comparison,
+                "interpretation": (
+                    "C.O.R.E. detected a difference from the immediately previous "
+                    "defensive snapshot. Changes are observations and require context "
+                    "before being treated as suspicious."
+                ),
+            },
+        )
+
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "mode": "local-read-only",
+        "generated_at": generated_at,
+        "mode": "local-read-only-observation",
         "posture": posture,
         "attention_score": score,
         "finding_count": len(findings),
         "severity_counts": severity_counts,
         "findings": findings,
-        "evidence": {
-            "hostname": system.get("hostname"),
-            "listener_count": listeners.get("count", 0),
-            "public_listener_count": len(public_listeners),
-            "unknown_owner_listener_count": len(unknown_owner_listeners),
-            "process_count": processes.get("count", 0),
-            "returned_process_count": processes.get("returned", 0),
-            "cpu_usage_percent": cpu_percent,
-            "memory_usage_percent": memory_percent,
-            "disk_usage_percent": disk_percent,
-        },
+        "evidence": evidence,
+        "baseline_comparison": baseline_comparison,
         "limitations": [
             "Local host observation only.",
             "No external network scanning was performed.",
             "No vulnerability database lookup was performed.",
-            "Findings are observations and do not prove compromise.",
+            "Changes from baseline are observations and do not prove compromise.",
+            "Each security.snapshot call records defensive telemetry for later comparison.",
         ],
     }
