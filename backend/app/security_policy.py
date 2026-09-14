@@ -47,6 +47,26 @@ class SecurityPolicyStore:
     def _endpoint(listener: dict) -> str:
         return f"{listener.get('address') or '?'}:{listener.get('port') or '?'}"
 
+    @staticmethod
+    def _display_endpoint(endpoint: str) -> str:
+        """Format IPv6 endpoints for human-readable/API presentation.
+
+        Stored endpoint keys intentionally remain unchanged so existing learned
+        and approved policy rows continue to compare against listener snapshots.
+        """
+        if endpoint.startswith("["):
+            return endpoint
+        address, separator, port = endpoint.rpartition(":")
+        if not separator:
+            return endpoint
+        if ":" in address:
+            return f"[{address}]:{port}"
+        return endpoint
+
+    @classmethod
+    def _display_endpoints(cls, endpoints) -> list[str]:
+        return [cls._display_endpoint(endpoint) for endpoint in sorted(endpoints)]
+
     def _approved_rows_sync(self, hostname: str) -> list[dict]:
         with self._connect() as connection:
             rows = connection.execute(
@@ -119,9 +139,13 @@ class SecurityPolicyStore:
             "mode": "administrator-approved" if approved else "learned-baseline",
             "approved_configured": bool(approved),
             "approved_count": len(approved),
-            "approved_endpoints": [row["endpoint"] for row in approved],
+            "approved_endpoints": self._display_endpoints(
+                row["endpoint"] for row in approved
+            ),
             "learned_count": len(learned),
-            "learned_endpoints": [row["endpoint"] for row in learned],
+            "learned_endpoints": self._display_endpoints(
+                row["endpoint"] for row in learned
+            ),
         }
 
     async def approve_learned(self, hostname: str, approved_by: str = "local-admin") -> dict:
@@ -169,19 +193,19 @@ class SecurityPolicyStore:
             }
 
         approved_endpoints = {row["endpoint"] for row in approved}
+        unexpected = current_public - approved_endpoints
+        missing = approved_endpoints - current_public
         return {
             "hostname": hostname,
             "mode": "administrator-approved",
             "approved_configured": True,
             "approved_public_listener_count": len(approved_endpoints),
             "current_public_listener_count": len(current_public),
-            "approved_public_listener_endpoints": sorted(approved_endpoints),
-            "unexpected_public_listener_endpoints": sorted(
-                current_public - approved_endpoints
+            "approved_public_listener_endpoints": self._display_endpoints(
+                approved_endpoints
             ),
-            "missing_approved_public_listener_endpoints": sorted(
-                approved_endpoints - current_public
-            ),
+            "unexpected_public_listener_endpoints": self._display_endpoints(unexpected),
+            "missing_approved_public_listener_endpoints": self._display_endpoints(missing),
             "note": (
                 "This policy was explicitly approved by an administrator and is "
                 "authoritative for public-listener drift detection."
