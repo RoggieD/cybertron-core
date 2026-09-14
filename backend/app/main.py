@@ -12,6 +12,7 @@ from backend.app.telemetry.sampler import (
     start_sampler,
     stop_sampler,
 )
+from backend.app.memory.middleware import ConversationMemoryMiddleware
 
 settings = get_settings()
 
@@ -20,6 +21,8 @@ app = FastAPI(
     version="0.0.1",
     description="CyberTron Orchestration & Reasoning Engine",
 )
+
+app.add_middleware(ConversationMemoryMiddleware)
 
 app.include_router(health_router)
 app.include_router(chat_router)
