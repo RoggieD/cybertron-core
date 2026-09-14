@@ -56,3 +56,81 @@ async def docker_inventory() -> dict:
     return await asyncio.to_thread(
         _docker_inventory_sync
     )
+
+
+async def docker_inspect(container_name: str) -> dict:
+    import asyncio
+    import json
+    import shutil
+    import subprocess
+
+    def _inspect_sync() -> dict:
+        docker = shutil.which("docker")
+
+        if not docker:
+            return {
+                "available": False,
+                "found": False,
+                "container": container_name,
+                "error": "Docker CLI not found.",
+            }
+
+        result = subprocess.run(
+            [
+                docker,
+                "inspect",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return {
+                "available": True,
+                "found": False,
+                "container": container_name,
+                "error": result.stderr.strip(),
+            }
+
+        data = json.loads(result.stdout)
+
+        if not data:
+            return {
+                "available": True,
+                "found": False,
+                "container": container_name,
+            }
+
+        item = data[0]
+
+        state = item.get("State", {})
+        config = item.get("Config", {})
+        network = item.get("NetworkSettings", {})
+
+        return {
+            "available": True,
+            "found": True,
+            "container": container_name,
+            "id": item.get("Id"),
+            "name": item.get("Name", "").lstrip("/"),
+            "image": config.get("Image"),
+            "status": state.get("Status"),
+            "running": state.get("Running"),
+            "health": (
+                state.get("Health", {}).get("Status")
+                if state.get("Health")
+                else None
+            ),
+            "started_at": state.get("StartedAt"),
+            "finished_at": state.get("FinishedAt"),
+            "restart_count": item.get("RestartCount"),
+            "ports": network.get("Ports") or {},
+            "networks": list(
+                (network.get("Networks") or {}).keys()
+            ),
+        }
+
+    return await asyncio.to_thread(_inspect_sync)

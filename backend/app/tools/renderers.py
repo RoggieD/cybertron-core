@@ -196,6 +196,9 @@ def render_verified_tool_result(
     if tool_id == "docker.inventory":
         return render_docker_inventory(result)
 
+    if tool_id == "docker.inspect":
+        return render_docker_inspect(result)
+
     if tool_id == "system.processes":
         return render_process_inventory(result)
 
@@ -298,6 +301,9 @@ def should_return_verified_only(
         return normalized in listener_requests
 
     if tool_id == "network.port_owner":
+        return True
+
+    if tool_id == "docker.inspect":
         return True
 
     return False
@@ -434,5 +440,103 @@ def render_port_owner(result: dict) -> str:
                 ),
             ]
         )
+
+    return "\n".join(lines)
+
+
+def render_docker_inspect(result: dict) -> str:
+    requested = result.get("container") or "unknown"
+
+    if not result.get("available", True):
+        return (
+            "DOCKER CONTAINER — VERIFIED\n\n"
+            f"Container: {requested}\n"
+            "Docker CLI: unavailable"
+        )
+
+    if not result.get("found"):
+        error = result.get("error")
+
+        lines = [
+            "DOCKER CONTAINER — VERIFIED",
+            "",
+            f"Container: {requested}",
+            "Found: no",
+        ]
+
+        if error:
+            lines.extend(
+                [
+                    "",
+                    "Details:",
+                    error,
+                ]
+            )
+
+        return "\n".join(lines)
+
+    name = result.get("name") or requested
+    image = result.get("image") or "unknown"
+    status = result.get("status") or "unknown"
+    health = result.get("health") or "not configured"
+    restart_count = result.get("restart_count")
+
+    lines = [
+        "DOCKER CONTAINER — VERIFIED",
+        "",
+        f"Name: {name}",
+        f"Image: {image}",
+        f"Status: {status}",
+        f"Health: {health}",
+        f"Restart count: {restart_count if restart_count is not None else 'unknown'}",
+    ]
+
+    networks = result.get("networks") or []
+
+    lines.extend(
+        [
+            "",
+            "Networks:",
+        ]
+    )
+
+    if networks:
+        for network in networks:
+            lines.append(f"- {network}")
+    else:
+        lines.append("- none reported")
+
+    ports = result.get("ports") or {}
+
+    lines.extend(
+        [
+            "",
+            "Ports:",
+        ]
+    )
+
+    if not ports:
+        lines.append("- none published")
+    else:
+        for container_port, bindings in sorted(ports.items()):
+            if not bindings:
+                lines.append(
+                    f"- {container_port} -> internal only / no host binding"
+                )
+                continue
+
+            for binding in bindings:
+                host_ip = binding.get("HostIp") or "0.0.0.0"
+                host_port = binding.get("HostPort") or "unknown"
+
+                display_ip = (
+                    f"[{host_ip}]"
+                    if ":" in str(host_ip)
+                    else str(host_ip)
+                )
+
+                lines.append(
+                    f"- {container_port} -> {display_ip}:{host_port}"
+                )
 
     return "\n".join(lines)

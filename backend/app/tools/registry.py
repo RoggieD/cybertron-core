@@ -1,5 +1,5 @@
 from backend.app.tools.base import ToolDefinition
-from backend.app.tools.docker import docker_inventory
+from backend.app.tools.docker import docker_inventory, docker_inspect
 from backend.app.tools.system import system_snapshot
 from backend.app.tools.processes import process_inventory
 from backend.app.tools.network import network_interfaces
@@ -54,6 +54,16 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=network_interfaces,
+    ),
+    "docker.inspect": ToolDefinition(
+        id="docker.inspect",
+        name="Docker Inspect",
+        description=(
+            "Read-only inspection of a specific Docker container."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=docker_inspect,
     ),
     "docker.inventory": ToolDefinition(
         id="docker.inventory",

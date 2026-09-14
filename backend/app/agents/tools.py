@@ -41,6 +41,15 @@ def select_tool(
         return "system.snapshot", {}
 
     if agent.id == "infrastructure":
+        container_name = extract_container_name(
+            message
+        )
+
+        if container_name is not None:
+            return "docker.inspect", {
+                "container_name": container_name,
+            }
+
         port = extract_port(message)
 
         if port is not None:
@@ -98,3 +107,27 @@ async def run_agent_tool(
     )
 
     return tool_id, result
+
+
+def extract_container_name(
+    message: str,
+) -> str | None:
+    normalized = message.strip()
+
+    patterns = (
+        r"\bcontainer\s+([A-Za-z0-9_.-]+)\b",
+        r"\bdetails\s+for\s+([A-Za-z0-9_.-]+)\b",
+        r"\bdoes\s+([A-Za-z0-9_.-]+)\s+expose\b",
+    )
+
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            normalized,
+            re.IGNORECASE,
+        )
+
+        if match:
+            return match.group(1)
+
+    return None

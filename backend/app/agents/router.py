@@ -28,6 +28,8 @@ INFRASTRUCTURE_KEYWORDS = {
     "ports",
     "reachability",
     "infrastructure",
+    "details for",
+    "expose",
 }
 
 
