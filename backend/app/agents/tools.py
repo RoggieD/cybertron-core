@@ -57,6 +57,34 @@ def select_tool(
         return "system.snapshot", {}
 
     if agent.id == "infrastructure":
+        incident_clock = extract_incident_clock(
+            message
+        )
+
+        incident_severity = (
+            "critical"
+            if "critical" in normalized
+            else None
+        )
+
+        if incident_clock is not None:
+            clock_hour, clock_minute = (
+                incident_clock
+            )
+
+            return "incident.summary", {
+                "mode": "since_clock",
+                "hour": clock_hour,
+                "minute": clock_minute,
+                "severity": incident_severity,
+            }
+
+        if "yesterday" in normalized:
+            return "incident.summary", {
+                "mode": "yesterday",
+                "severity": incident_severity,
+            }
+
         incident_hours = extract_incident_hours(
             message
         )
@@ -354,5 +382,53 @@ def extract_incident_hours(
         or "past hour" in normalized
     ):
         return 1
+
+    return None
+
+def extract_incident_clock(
+    message: str,
+) -> tuple[int, int] | None:
+    normalized = message.lower()
+
+    # 12-hour form:
+    # since 1 am
+    # since 1:30 PM
+    match = re.search(
+        r"\bsince\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+
+    if match:
+        hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        meridiem = match.group(3).lower()
+
+        if not 1 <= hour <= 12:
+            return None
+
+        if not 0 <= minute <= 59:
+            return None
+
+        if meridiem == "am":
+            hour = 0 if hour == 12 else hour
+        else:
+            hour = 12 if hour == 12 else hour + 12
+
+        return hour, minute
+
+    # 24-hour form:
+    # since 14:30
+    match = re.search(
+        r"\bsince\s+([01]?\d|2[0-3]):([0-5]\d)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+
+    if match:
+        return (
+            int(match.group(1)),
+            int(match.group(2)),
+        )
 
     return None

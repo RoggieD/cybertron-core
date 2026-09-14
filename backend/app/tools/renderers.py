@@ -809,6 +809,8 @@ def render_incident_summary_query_aware(
         "time_window",
         "since_midnight",
         "today",
+        "yesterday",
+        "since_clock",
     }:
         hours = result.get("hours")
         severity = result.get(
@@ -826,6 +828,23 @@ def render_incident_summary_query_aware(
                 "INCIDENTS — SINCE MIDNIGHT "
                 "— VERIFIED"
             )
+
+        elif mode == "yesterday":
+            title = (
+                "INCIDENTS — YESTERDAY "
+                "— VERIFIED"
+            )
+
+        elif mode == "since_clock":
+            hour = result.get("hour")
+            minute = result.get("minute", 0)
+
+            title = (
+                "INCIDENTS — SINCE "
+                f"{hour:02d}:{minute:02d} "
+                "— VERIFIED"
+            )
+
         else:
             title = (
                 "INCIDENTS — TODAY — VERIFIED"

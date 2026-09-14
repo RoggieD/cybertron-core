@@ -62,6 +62,8 @@ INFRASTRUCTURE_KEYWORDS = {
     "what happened",
     "what failed",
     "today",
+    "yesterday",
+    "anything go wrong",
     "infrastructure",
     "details for",
     "expose",

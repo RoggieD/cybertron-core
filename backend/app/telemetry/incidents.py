@@ -753,3 +753,60 @@ def incidents_since(
         }
         for row in rows
     ]
+
+
+
+def incidents_between(
+    start: datetime,
+    end: datetime,
+    severity: str | None = None,
+    limit: int = 2000,
+) -> list[dict]:
+    initialize()
+
+    query = """
+        SELECT
+            incident_id,
+            severity,
+            title,
+            message,
+            state,
+            timestamp,
+            value,
+            threshold
+        FROM incidents
+        WHERE timestamp >= ?
+          AND timestamp < ?
+    """
+
+    params: list = [
+        start.isoformat(),
+        end.isoformat(),
+    ]
+
+    if severity:
+        query += " AND severity = ?"
+        params.append(severity.lower())
+
+    query += " ORDER BY id ASC LIMIT ?"
+    params.append(max(1, min(limit, 5000)))
+
+    with _connect() as connection:
+        rows = connection.execute(
+            query,
+            tuple(params),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in rows
+    ]
