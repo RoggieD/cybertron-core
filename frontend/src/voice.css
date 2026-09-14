@@ -1,0 +1,102 @@
+.voice-controls {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.voice-button {
+  appearance: none;
+  border: 1px solid rgba(0, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.24);
+  color: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.voice-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: currentColor;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.12);
+}
+
+.voice-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.voice-button.active {
+  border-color: currentColor;
+  box-shadow: inset 0 0 18px rgba(0, 255, 255, 0.08), 0 0 12px rgba(0, 255, 255, 0.12);
+}
+
+.voice-button.listening {
+  color: #ffd166;
+  animation: voice-pulse 0.9s ease-in-out infinite;
+}
+
+.voice-state {
+  margin-left: auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+
+.voice-state.speaking {
+  color: #64ffd8;
+  border-color: currentColor;
+  box-shadow: 0 0 14px rgba(100, 255, 216, 0.16);
+}
+
+.voice-state.listening {
+  color: #ffd166;
+  border-color: currentColor;
+}
+
+.voice-state.error {
+  color: #ff6b6b;
+  border-color: currentColor;
+}
+
+.reactor-speaking .reactor-core {
+  animation: pulse 0.42s ease-in-out infinite, voice-glow 0.72s ease-in-out infinite;
+}
+
+.reactor-speaking .ring-one {
+  animation: rotate 1.2s linear infinite;
+}
+
+.reactor-speaking .ring-two {
+  animation: rotate-reverse 1.7s linear infinite;
+}
+
+.reactor-speaking .ring-three {
+  animation: rotate 2.3s linear infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes voice-glow {
+  0%, 100% {
+    box-shadow: 0 0 18px #64ffd8, 0 0 48px rgba(100, 255, 216, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 32px #ffffff, 0 0 95px rgba(100, 255, 216, 0.82);
+  }
+}
+
+@media (max-width: 700px) {
+  .voice-state {
+    width: 100%;
+    margin-left: 0;
+  }
+}
