@@ -7,6 +7,10 @@ from backend.app.api.traces import router as traces_router
 from backend.app.api.status import router as status_router
 from backend.app.api.websocket import router as websocket_router
 from backend.app.core.config import get_settings
+from backend.app.telemetry.sampler import (
+    start_sampler,
+    stop_sampler,
+)
 
 settings = get_settings()
 
@@ -22,6 +26,16 @@ app.include_router(models_router)
 app.include_router(traces_router)
 app.include_router(status_router)
 app.include_router(websocket_router)
+
+
+@app.on_event("startup")
+async def telemetry_startup() -> None:
+    await start_sampler()
+
+
+@app.on_event("shutdown")
+async def telemetry_shutdown() -> None:
+    await stop_sampler()
 
 
 @app.get("/")

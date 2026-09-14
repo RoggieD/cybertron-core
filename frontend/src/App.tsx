@@ -4,6 +4,7 @@ import { getHealth } from "./api/core";
 import {
   getStatusOverview,
   getServiceStatus,
+  getTelemetryHistory,
   type StatusOverview,
   type ServiceHealthItem
 } from "./api/status";
@@ -156,6 +157,37 @@ export default function App() {
     useState<Date | null>(null);
   const [telemetryHistory, setTelemetryHistory] =
     useState<TelemetrySample[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    void getTelemetryHistory(24)
+      .then((history) => {
+        if (!active) {
+          return;
+        }
+
+        setTelemetryHistory(
+          history.samples.map((sample) => ({
+            timestamp:
+              new Date(sample.timestamp).getTime(),
+            cpu: sample.cpu_percent,
+            memory: sample.memory_percent,
+            disk: sample.disk_percent,
+            serviceLatency:
+              sample.service_latency_ms
+          }))
+        );
+      })
+      .catch(() => {
+        // Live telemetry will continue even if
+        // persisted history is temporarily unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;

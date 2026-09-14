@@ -92,3 +92,39 @@ export async function getServiceStatus(): Promise<ServiceHealthResponse> {
 
   return response.json();
 }
+
+export type TelemetryHistorySample = {
+  timestamp: string;
+  cpu_percent: number;
+  memory_percent: number;
+  disk_percent: number;
+  docker_running: number;
+  docker_total: number;
+  services_reachable: number;
+  services_total: number;
+  listeners: number;
+  service_latency_ms: number;
+};
+
+export type TelemetryHistoryResponse = {
+  count: number;
+  samples: TelemetryHistorySample[];
+};
+
+export async function getTelemetryHistory(
+  limit = 240
+): Promise<TelemetryHistoryResponse> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/history?limit=${limit}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Telemetry history API returned ${response.status}`
+    );
+  }
+
+  return response.json();
+}
