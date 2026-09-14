@@ -1,11 +1,19 @@
-import { useEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
 
 import App from "./App";
-import CognitionGraph from "./components/CognitionGraph";
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
 import "./core-shell.css";
+
+const CognitionGraph = lazy(
+  () => import("./components/CognitionGraph"),
+);
 
 function pageFromPath(pathname: string): CorePage {
   if (pathname.startsWith("/systems")) return "systems";
@@ -15,6 +23,14 @@ function pageFromPath(pathname: string): CorePage {
   return "dashboard";
 }
 
+const PAGE_TITLES: Record<CorePage, string> = {
+  dashboard: "Dashboard",
+  systems: "Systems",
+  services: "Services",
+  incidents: "Incidents",
+  memory: "Memory",
+};
+
 export default function CoreConsole() {
   const [page, setPage] = useState<CorePage>(() =>
     pageFromPath(window.location.pathname),
@@ -22,6 +38,7 @@ export default function CoreConsole() {
 
   useEffect(() => {
     document.body.dataset.corePage = page;
+    document.title = `C.O.R.E. — ${PAGE_TITLES[page]}`;
 
     return () => {
       delete document.body.dataset.corePage;
@@ -52,7 +69,15 @@ export default function CoreConsole() {
 
       {page === "dashboard" && (
         <div className="core-dashboard-graph">
-          <CognitionGraph />
+          <Suspense
+            fallback={
+              <div className="core-graph-loading">
+                INITIALIZING COGNITION MAP…
+              </div>
+            }
+          >
+            <CognitionGraph />
+          </Suspense>
         </div>
       )}
 
