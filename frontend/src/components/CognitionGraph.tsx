@@ -1,37 +1,38 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import type { CoreEvent } from "../api/websocket";
 
-type NodeId =
-  | "user"
-  | "router"
-  | "agent"
-  | "memory"
-  | "tool"
-  | "model";
+type NodeId = string;
 
 type GraphNode = {
   id: NodeId;
   label: string;
   position: [number, number, number];
+  provenance?: boolean;
 };
 
 type GraphEdge = {
   from: NodeId;
   to: NodeId;
+  provenance?: boolean;
 };
 
-const NODES: GraphNode[] = [
-  { id: "user", label: "USER", position: [-4.7, 0, 0] },
-  { id: "router", label: "ROUTER", position: [-2.8, 0, 0.15] },
-  { id: "agent", label: "AGENT", position: [-0.8, 0, 0.3] },
-  { id: "memory", label: "MEMORY", position: [1.2, 1.65, -0.2] },
-  { id: "tool", label: "TOOL", position: [1.2, -1.65, 0.2] },
-  { id: "model", label: "MODEL", position: [4.1, 0, 0] },
+export type CognitionProvenance = {
+  memorySources: string[];
+  tools: string[];
+};
+
+const BASE_NODES: GraphNode[] = [
+  { id: "user", label: "USER", position: [-5.1, 0, 0] },
+  { id: "router", label: "ROUTER", position: [-3.1, 0, 0.15] },
+  { id: "agent", label: "AGENT", position: [-1.0, 0, 0.3] },
+  { id: "memory", label: "MEMORY", position: [1.15, 1.45, -0.2] },
+  { id: "tool", label: "TOOL", position: [1.15, -1.45, 0.2] },
+  { id: "model", label: "MODEL", position: [4.9, 0, 0] },
 ];
 
-const EDGES: GraphEdge[] = [
+const BASE_EDGES: GraphEdge[] = [
   { from: "user", to: "router" },
   { from: "router", to: "agent" },
   { from: "agent", to: "memory" },
@@ -40,6 +41,49 @@ const EDGES: GraphEdge[] = [
   { from: "tool", to: "model" },
   { from: "model", to: "user" },
 ];
+
+function normalizeLabel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "UNKNOWN";
+  return trimmed.length > 18 ? `${trimmed.slice(0, 16)}…` : trimmed;
+}
+
+function buildGraph(provenance: CognitionProvenance): {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+} {
+  const nodes = [...BASE_NODES];
+  const edges = [...BASE_EDGES];
+
+  const memorySources = provenance.memorySources.slice(0, 4);
+  const tools = provenance.tools.slice(0, 4);
+
+  memorySources.forEach((source, index) => {
+    const id = `memory-source:${source}`;
+    const offset = index - (memorySources.length - 1) / 2;
+    nodes.push({
+      id,
+      label: normalizeLabel(source).toUpperCase(),
+      position: [2.7 + Math.abs(offset) * 0.15, 2.85 + offset * 0.65, -0.45],
+      provenance: true,
+    });
+    edges.push({ from: id, to: "memory", provenance: true });
+  });
+
+  tools.forEach((tool, index) => {
+    const id = `tool-source:${tool}`;
+    const offset = index - (tools.length - 1) / 2;
+    nodes.push({
+      id,
+      label: normalizeLabel(tool).toUpperCase(),
+      position: [2.7 + Math.abs(offset) * 0.15, -2.85 + offset * 0.65, 0.45],
+      provenance: true,
+    });
+    edges.push({ from: id, to: "tool", provenance: true });
+  });
+
+  return { nodes, edges };
+}
 
 function eventNode(eventType: string): NodeId | null {
   if (eventType === "prompt.received") return "user";
@@ -52,21 +96,44 @@ function eventNode(eventType: string): NodeId | null {
   return null;
 }
 
-function createLabel(text: string) {
+function currentAccent() {
+  const green = document.documentElement.dataset.coreTheme === "neon-green";
+  return green
+    ? {
+        accent: 0x39ff14,
+        accentSoft: 0xaaff98,
+        idle: 0x315d2f,
+        idleEmissive: 0x0b3510,
+        edge: 0x2e6827,
+        text: "#e6ffe1",
+        shadow: "#39ff14",
+      }
+    : {
+        accent: 0x53e6ff,
+        accentSoft: 0xa7f6ff,
+        idle: 0x315d68,
+        idleEmissive: 0x062d35,
+        edge: 0x245968,
+        text: "#d9fbff",
+        shadow: "#53e6ff",
+      };
+}
+
+function createLabel(text: string, provenance: boolean, palette: ReturnType<typeof currentAccent>) {
   const canvas = document.createElement("canvas");
-  canvas.width = 384;
+  canvas.width = 512;
   canvas.height = 96;
 
   const context = canvas.getContext("2d");
   if (!context) return null;
 
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.font = "600 34px monospace";
+  context.font = provenance ? "500 24px monospace" : "600 34px monospace";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.shadowColor = "#53e6ff";
-  context.shadowBlur = 12;
-  context.fillStyle = "#d9fbff";
+  context.shadowColor = palette.shadow;
+  context.shadowBlur = provenance ? 7 : 12;
+  context.fillStyle = palette.text;
   context.fillText(text, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -79,7 +146,7 @@ function createLabel(text: string) {
   });
 
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(2.3, 0.58, 1);
+  sprite.scale.set(provenance ? 2.55 : 2.3, provenance ? 0.48 : 0.58, 1);
 
   return { sprite, material, texture };
 }
@@ -87,9 +154,11 @@ function createLabel(text: string) {
 export default function CognitionGraph({
   event,
   connected,
+  provenance,
 }: {
   event: CoreEvent | null;
   connected: boolean;
+  provenance: CognitionProvenance;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const activeNodeRef = useRef<NodeId | null>(null);
@@ -97,6 +166,16 @@ export default function CognitionGraph({
   const transitionStartedRef = useRef(0);
   const [activeNode, setActiveNode] = useState<NodeId | null>(null);
   const [lastEvent, setLastEvent] = useState("WAITING");
+
+  const graph = useMemo(
+    () => buildGraph(provenance),
+    [provenance.memorySources, provenance.tools],
+  );
+
+  const graphSignature = useMemo(
+    () => graph.nodes.map((node) => node.id).join("|"),
+    [graph],
+  );
 
   useEffect(() => {
     if (!event) return;
@@ -116,8 +195,9 @@ export default function CognitionGraph({
     const mount = mountRef.current;
     if (!mount) return;
 
+    const palette = currentAccent();
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020507, 0.055);
+    scene.fog = new THREE.FogExp2(0x020507, 0.05);
 
     const camera = new THREE.PerspectiveCamera(
       43,
@@ -125,7 +205,7 @@ export default function CognitionGraph({
       0.1,
       100,
     );
-    camera.position.set(0, 0.1, 10.5);
+    camera.position.set(0, 0.1, 11.7);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -137,23 +217,23 @@ export default function CognitionGraph({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
-    mount.appendChild(renderer.domElement);
+    mount.replaceChildren(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0x8befff, 0.7));
+    scene.add(new THREE.AmbientLight(palette.accentSoft, 0.7));
 
-    const keyLight = new THREE.PointLight(0x53e6ff, 42, 28);
+    const keyLight = new THREE.PointLight(palette.accent, 42, 30);
     keyLight.position.set(0, 3.5, 7);
     scene.add(keyLight);
 
-    const rimLight = new THREE.PointLight(0x3a7cff, 28, 24);
+    const rimLight = new THREE.PointLight(0x3a7cff, 22, 24);
     rimLight.position.set(-5, -3, 4);
     scene.add(rimLight);
 
     const starGeometry = new THREE.BufferGeometry();
     const starPositions = new Float32Array(240 * 3);
     for (let i = 0; i < starPositions.length; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 22;
-      starPositions[i + 1] = (Math.random() - 0.5) * 12;
+      starPositions[i] = (Math.random() - 0.5) * 24;
+      starPositions[i + 1] = (Math.random() - 0.5) * 14;
       starPositions[i + 2] = -2 - Math.random() * 8;
     }
     starGeometry.setAttribute(
@@ -161,17 +241,19 @@ export default function CognitionGraph({
       new THREE.BufferAttribute(starPositions, 3),
     );
     const starMaterial = new THREE.PointsMaterial({
-      color: 0x53e6ff,
+      color: palette.accent,
       size: 0.025,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.34,
       depthWrite: false,
     });
     const stars = new THREE.Points(starGeometry, starMaterial);
     scene.add(stars);
 
     const nodeGeometry = new THREE.IcosahedronGeometry(0.5, 3);
+    const sourceGeometry = new THREE.OctahedronGeometry(0.28, 2);
     const haloGeometry = new THREE.RingGeometry(0.68, 0.73, 64);
+    const sourceHaloGeometry = new THREE.RingGeometry(0.4, 0.43, 48);
     const nodeObjects = new Map<NodeId, THREE.Mesh>();
     const haloObjects = new Map<NodeId, THREE.Mesh>();
     const labels: Array<{
@@ -179,40 +261,40 @@ export default function CognitionGraph({
       texture: THREE.Texture;
     }> = [];
 
-    for (const node of NODES) {
+    for (const node of graph.nodes) {
       const material = new THREE.MeshStandardMaterial({
-        color: 0x315d68,
-        emissive: 0x062d35,
-        emissiveIntensity: 1.4,
+        color: node.provenance ? palette.edge : palette.idle,
+        emissive: node.provenance ? palette.idleEmissive : palette.idleEmissive,
+        emissiveIntensity: node.provenance ? 1.9 : 1.4,
         roughness: 0.2,
         metalness: 0.72,
       });
-      const mesh = new THREE.Mesh(nodeGeometry, material);
+      const mesh = new THREE.Mesh(node.provenance ? sourceGeometry : nodeGeometry, material);
       mesh.position.set(...node.position);
       scene.add(mesh);
       nodeObjects.set(node.id, mesh);
 
       const haloMaterial = new THREE.MeshBasicMaterial({
-        color: 0x53e6ff,
+        color: palette.accent,
         transparent: true,
-        opacity: 0.16,
+        opacity: node.provenance ? 0.28 : 0.16,
         side: THREE.DoubleSide,
         depthWrite: false,
       });
-      const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+      const halo = new THREE.Mesh(
+        node.provenance ? sourceHaloGeometry : haloGeometry,
+        haloMaterial,
+      );
       halo.position.copy(mesh.position);
       scene.add(halo);
       haloObjects.set(node.id, halo);
 
-      const label = createLabel(node.label);
+      const label = createLabel(node.label, !!node.provenance, palette);
       if (label) {
         label.sprite.position.copy(mesh.position);
-        label.sprite.position.y -= 0.9;
+        label.sprite.position.y -= node.provenance ? 0.57 : 0.9;
         scene.add(label.sprite);
-        labels.push({
-          material: label.material,
-          texture: label.texture,
-        });
+        labels.push({ material: label.material, texture: label.texture });
       }
     }
 
@@ -222,7 +304,7 @@ export default function CognitionGraph({
       material: THREE.LineBasicMaterial;
     }> = [];
 
-    for (const edge of EDGES) {
+    for (const edge of graph.edges) {
       const from = nodeObjects.get(edge.from);
       const to = nodeObjects.get(edge.to);
       if (!from || !to) continue;
@@ -232,9 +314,9 @@ export default function CognitionGraph({
         to.position.clone(),
       ]);
       const material = new THREE.LineBasicMaterial({
-        color: 0x245968,
+        color: palette.edge,
         transparent: true,
-        opacity: 0.48,
+        opacity: edge.provenance ? 0.72 : 0.48,
       });
       const line = new THREE.Line(geometry, material);
       scene.add(line);
@@ -243,14 +325,14 @@ export default function CognitionGraph({
 
     const packetGeometry = new THREE.SphereGeometry(0.11, 20, 20);
     const packetMaterial = new THREE.MeshBasicMaterial({
-      color: 0xc7fbff,
+      color: palette.accentSoft,
       transparent: true,
       opacity: 0,
     });
     const packet = new THREE.Mesh(packetGeometry, packetMaterial);
     scene.add(packet);
 
-    const packetLight = new THREE.PointLight(0x53e6ff, 10, 3.2);
+    const packetLight = new THREE.PointLight(palette.accent, 10, 3.2);
     packet.add(packetLight);
 
     let frame = 0;
@@ -264,7 +346,7 @@ export default function CognitionGraph({
 
       stars.rotation.z = time * 0.006;
 
-      for (const [index, node] of NODES.entries()) {
+      for (const [index, node] of graph.nodes.entries()) {
         const mesh = nodeObjects.get(node.id);
         const halo = haloObjects.get(node.id);
         if (!mesh || !halo) continue;
@@ -277,19 +359,32 @@ export default function CognitionGraph({
         mesh.rotation.y = time * (0.22 + index * 0.012);
 
         const idlePulse = 1 + Math.sin(time * 1.5 + index) * 0.025;
+        const sourcePulse = node.provenance ? 1.05 + Math.sin(time * 3 + index) * 0.06 : 1;
         const activePulse = isActive ? 1.16 + Math.sin(time * 7) * 0.07 : 1;
-        mesh.scale.setScalar(idlePulse * activePulse);
+        mesh.scale.setScalar(idlePulse * sourcePulse * activePulse);
 
-        material.color.setHex(isActive ? 0xa7f6ff : 0x315d68);
-        material.emissive.setHex(isActive ? 0x32dff5 : 0x062d35);
-        material.emissiveIntensity = isActive ? 4.2 : 1.4;
+        if (isActive) {
+          material.color.setHex(palette.accentSoft);
+          material.emissive.setHex(palette.accent);
+          material.emissiveIntensity = 4.2;
+        } else if (node.provenance) {
+          material.color.setHex(palette.edge);
+          material.emissive.setHex(palette.accent);
+          material.emissiveIntensity = 1.7 + Math.sin(time * 3 + index) * 0.35;
+        } else {
+          material.color.setHex(palette.idle);
+          material.emissive.setHex(palette.idleEmissive);
+          material.emissiveIntensity = 1.4;
+        }
 
         halo.scale.setScalar(
-          isActive ? 1.22 + Math.sin(time * 5) * 0.1 : 1,
+          isActive ? 1.22 + Math.sin(time * 5) * 0.1 : node.provenance ? sourcePulse : 1,
         );
         haloMaterial.opacity = isActive
           ? 0.72 + Math.sin(time * 6) * 0.2
-          : 0.12;
+          : node.provenance
+            ? 0.34 + Math.sin(time * 3 + index) * 0.12
+            : 0.12;
       }
 
       for (const { edge, material } of edgeObjects) {
@@ -299,10 +394,12 @@ export default function CognitionGraph({
           ((edge.from === previous && edge.to === current) ||
             (edge.from === current && edge.to === previous));
 
-        material.color.setHex(activePath ? 0x8ff5ff : 0x245968);
+        material.color.setHex(activePath ? palette.accentSoft : palette.edge);
         material.opacity = activePath
           ? 0.82 + Math.sin(time * 9) * 0.16
-          : 0.48;
+          : edge.provenance
+            ? 0.66 + Math.sin(time * 4) * 0.12
+            : 0.48;
       }
 
       const previousMesh = previous ? nodeObjects.get(previous) : null;
@@ -314,11 +411,7 @@ export default function CognitionGraph({
         const progress = Math.min(elapsed / duration, 1);
         const eased = 1 - Math.pow(1 - progress, 3);
 
-        packet.position.lerpVectors(
-          previousMesh.position,
-          currentMesh.position,
-          eased,
-        );
+        packet.position.lerpVectors(previousMesh.position, currentMesh.position, eased);
         packetMaterial.opacity = progress < 1 ? 0.95 : 0;
         packet.scale.setScalar(1 + Math.sin(time * 18) * 0.2);
       } else {
@@ -345,7 +438,9 @@ export default function CognitionGraph({
       cancelAnimationFrame(frame);
       renderer.dispose();
       nodeGeometry.dispose();
+      sourceGeometry.dispose();
       haloGeometry.dispose();
+      sourceHaloGeometry.dispose();
       starGeometry.dispose();
       starMaterial.dispose();
       packetGeometry.dispose();
@@ -354,16 +449,13 @@ export default function CognitionGraph({
       for (const mesh of nodeObjects.values()) {
         (mesh.material as THREE.Material).dispose();
       }
-
       for (const halo of haloObjects.values()) {
         (halo.material as THREE.Material).dispose();
       }
-
       for (const { line, material } of edgeObjects) {
         line.geometry.dispose();
         material.dispose();
       }
-
       for (const label of labels) {
         label.material.dispose();
         label.texture.dispose();
@@ -371,13 +463,15 @@ export default function CognitionGraph({
 
       renderer.domElement.remove();
     };
-  }, []);
+  }, [graphSignature]);
+
+  const provenanceCount = provenance.memorySources.length + provenance.tools.length;
 
   return (
     <section className="cognition-graph-panel">
       <div className="cognition-graph-header">
         <div>
-          <div className="cognition-graph-kicker">LIVE COGNITION MAP</div>
+          <div className="cognition-graph-kicker">LIVE COGNITION + PROVENANCE MAP</div>
           <h2>C.O.R.E. Processing Graph</h2>
         </div>
         <div className={`cognition-link-state ${connected ? "online" : "offline"}`}>
@@ -388,15 +482,17 @@ export default function CognitionGraph({
       <div ref={mountRef} className="cognition-graph-canvas" />
 
       <div className="cognition-graph-legend">
-        {NODES.map((node) => (
+        {BASE_NODES.map((node) => (
           <span key={node.id}>
             {node.label}{activeNode === node.id ? " • ACTIVE" : ""}
           </span>
         ))}
+        <span>PROVENANCE SOURCES: {provenanceCount}</span>
       </div>
 
       <div className="cognition-graph-footer">
         <span>ACTIVE: {activeNode?.toUpperCase() ?? "IDLE"}</span>
+        <span>SOURCES: {provenanceCount}</span>
         <span>EVENT: {lastEvent}</span>
       </div>
     </section>
