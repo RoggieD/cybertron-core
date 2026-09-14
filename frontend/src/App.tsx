@@ -5,8 +5,10 @@ import {
   getStatusOverview,
   getServiceStatus,
   getTelemetryHistory,
+  getIncidents,
   type StatusOverview,
-  type ServiceHealthItem
+  type ServiceHealthItem,
+  type IncidentEvent
 } from "./api/status";
 import { streamChat, type StreamEvent } from "./api/chat";
 import {
@@ -188,6 +190,10 @@ export default function App() {
     useState<TelemetrySample[]>([]);
   const [telemetryRange, setTelemetryRange] =
     useState<TelemetryRange>("2m");
+  const [incidents, setIncidents] =
+    useState<IncidentEvent[]>([]);
+  const [activeIncidentIds, setActiveIncidentIds] =
+    useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -397,6 +403,35 @@ export default function App() {
       socket.close();
     };
   }, [telemetryRange]);
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshIncidents = async () => {
+      try {
+        const data = await getIncidents(20);
+
+        if (active) {
+          setIncidents(data.incidents);
+          setActiveIncidentIds(data.active);
+        }
+      } catch {
+        // Incident display should never break the main UI.
+      }
+    };
+
+    void refreshIncidents();
+
+    const timer = window.setInterval(
+      () => void refreshIncidents(),
+      5000
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   async function checkSelectedService() {
     if (!selectedService || manualCheckBusy) {
@@ -712,6 +747,66 @@ export default function App() {
             <small>ACTIVE SOCKETS</small>
           </article>
         </div>
+      </section>
+
+      <section className="incident-panel">
+        <div className="incident-header">
+          <div>
+            <span>INCIDENT MONITOR</span>
+            <strong>
+              {activeIncidentIds.length === 0
+                ? "ALL SYSTEMS NOMINAL"
+                : `${activeIncidentIds.length} ACTIVE`}
+            </strong>
+          </div>
+
+          <div
+            className={
+              activeIncidentIds.length === 0
+                ? "incident-indicator nominal"
+                : "incident-indicator active"
+            }
+          >
+            {activeIncidentIds.length === 0
+              ? "NOMINAL"
+              : "ATTENTION"}
+          </div>
+        </div>
+
+        {incidents.length === 0 ? (
+          <div className="incident-empty">
+            No incident events recorded this session.
+          </div>
+        ) : (
+          <div className="incident-list">
+            {[...incidents]
+              .reverse()
+              .slice(0, 8)
+              .map((incident, index) => (
+                <article
+                  key={`${incident.id}-${incident.timestamp ?? index}`}
+                  className={`incident-item incident-${incident.severity} incident-${incident.state}`}
+                >
+                  <div className="incident-item-header">
+                    <strong>{incident.title}</strong>
+                    <span>
+                      {incident.state.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <p>{incident.message}</p>
+
+                  <small>
+                    {incident.timestamp
+                      ? new Date(
+                          incident.timestamp
+                        ).toLocaleTimeString()
+                      : "TIME N/A"}
+                  </small>
+                </article>
+              ))}
+          </div>
+        )}
       </section>
 
       <section className="trend-panel">

@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
 
+from backend.app.telemetry.alerts import evaluate_alerts
+from backend.app.telemetry.incidents import update_incidents
 from backend.app.telemetry.store import (
     insert_sample,
     prune,
@@ -92,6 +94,9 @@ async def _sampler_loop() -> None:
                 sample,
             )
 
+            alerts = evaluate_alerts(sample)
+            update_incidents(alerts)
+
             await asyncio.to_thread(
                 prune,
                 7,
@@ -121,6 +126,9 @@ async def start_sampler() -> None:
             insert_sample,
             sample,
         )
+
+        alerts = evaluate_alerts(sample)
+        update_incidents(alerts)
     except Exception as exc:
         print(
             f"[telemetry] initial sample failed: {exc}"

@@ -128,3 +128,38 @@ export async function getTelemetryHistory(
 
   return response.json();
 }
+
+export type IncidentEvent = {
+  id: string;
+  severity: string;
+  title: string;
+  message: string;
+  state: string;
+  timestamp?: string;
+  value?: number | null;
+  threshold?: number | null;
+};
+
+export type IncidentResponse = {
+  active: string[];
+  count: number;
+  incidents: IncidentEvent[];
+};
+
+export async function getIncidents(
+  limit = 20
+): Promise<IncidentResponse> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/incidents?limit=${limit}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Incident API returned ${response.status}`
+    );
+  }
+
+  return response.json();
+}
