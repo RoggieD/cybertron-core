@@ -67,6 +67,16 @@ async def collect_sample() -> dict:
             if gpu.get("available")
             else None
         ),
+        "gpu_memory_percent": (
+            gpu.get("memory_usage_percent")
+            if gpu.get("available")
+            else None
+        ),
+        "gpu_power_watts": (
+            gpu.get("power_draw_watts")
+            if gpu.get("available")
+            else None
+        ),
         "docker_running": running_containers,
         "docker_total": docker.get(
             "count",
