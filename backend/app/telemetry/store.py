@@ -27,6 +27,7 @@ def initialize() -> None:
                 cpu_percent REAL NOT NULL,
                 memory_percent REAL NOT NULL,
                 disk_percent REAL NOT NULL,
+                gpu_percent REAL,
                 docker_running INTEGER NOT NULL,
                 docker_total INTEGER NOT NULL,
                 services_reachable INTEGER NOT NULL,
@@ -36,6 +37,17 @@ def initialize() -> None:
             )
             """
         )
+
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(telemetry_samples)"
+            ).fetchall()
+        }
+        if "gpu_percent" not in columns:
+            connection.execute(
+                "ALTER TABLE telemetry_samples ADD COLUMN gpu_percent REAL"
+            )
 
         connection.execute(
             """
@@ -57,6 +69,7 @@ def insert_sample(sample: dict) -> None:
                 cpu_percent,
                 memory_percent,
                 disk_percent,
+                gpu_percent,
                 docker_running,
                 docker_total,
                 services_reachable,
@@ -64,13 +77,14 @@ def insert_sample(sample: dict) -> None:
                 listeners,
                 service_latency_ms
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sample["timestamp"],
                 sample["cpu_percent"],
                 sample["memory_percent"],
                 sample["disk_percent"],
+                sample.get("gpu_percent"),
                 sample["docker_running"],
                 sample["docker_total"],
                 sample["services_reachable"],
@@ -94,6 +108,7 @@ def recent_samples(limit: int = 240) -> list[dict]:
                 cpu_percent,
                 memory_percent,
                 disk_percent,
+                gpu_percent,
                 docker_running,
                 docker_total,
                 services_reachable,
