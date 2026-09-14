@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -19,13 +19,7 @@ class SpeechRequest(BaseModel):
 
 
 def _discover_kokoro_base_url_sync() -> tuple[str, str]:
-    """Resolve Kokoro without depending on a Docker-assigned IP.
-
-    Prefer an explicitly configured base URL when it is reachable. If it is not,
-    inspect the named local container and build a URL from its current Docker IP.
-    This keeps voice working across container restarts where the bridge address
-    can change.
-    """
+    """Resolve Kokoro without depending on a Docker-assigned IP."""
     try:
         result = subprocess.run(
             [
@@ -56,6 +50,13 @@ async def _kokoro_base_url() -> tuple[str, str]:
     return await asyncio.to_thread(_discover_kokoro_base_url_sync)
 
 
+def _whisper_headers() -> dict[str, str]:
+    headers: dict[str, str] = {}
+    if settings.whisper_api_key:
+        headers["Authorization"] = f"Bearer {settings.whisper_api_key}"
+    return headers
+
+
 @router.get("/status")
 async def voice_status() -> dict:
     base_url, source = await _kokoro_base_url()
@@ -74,6 +75,81 @@ async def voice_status() -> dict:
         "default_voice": settings.kokoro_voice,
         "reachable": reachable,
     }
+
+
+@router.get("/stt/status")
+async def stt_status() -> dict:
+    base_url = settings.whisper_base_url.rstrip("/")
+    reachable = False
+    authenticated = bool(settings.whisper_api_key)
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(
+                f"{base_url.rsplit('/v1', 1)[0]}/docs",
+                headers=_whisper_headers(),
+                follow_redirects=True,
+            )
+        reachable = response.status_code < 500
+    except httpx.HTTPError:
+        reachable = False
+
+    return {
+        "provider": "faster-whisper",
+        "base_url": base_url,
+        "model": settings.whisper_model,
+        "authenticated": authenticated,
+        "reachable": reachable,
+    }
+
+
+@router.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)) -> dict:
+    if not settings.whisper_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Whisper API key is not configured.",
+        )
+
+    audio = await file.read()
+    if not audio:
+        raise HTTPException(status_code=400, detail="Audio upload is empty.")
+    if len(audio) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB.")
+
+    files = {
+        "file": (
+            file.filename or "audio.webm",
+            audio,
+            file.content_type or "application/octet-stream",
+        )
+    }
+    data = {"model": settings.whisper_model}
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{settings.whisper_base_url.rstrip('/')}/audio/transcriptions",
+                headers=_whisper_headers(),
+                files=files,
+                data=data,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:500]
+        raise HTTPException(
+            status_code=502,
+            detail=f"Whisper STT returned {exc.response.status_code}: {detail}",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Whisper STT is unavailable: {exc}",
+        ) from exc
+
+    payload = response.json()
+    text = str(payload.get("text", "")).strip()
+    return {"text": text, "provider": "faster-whisper", "model": settings.whisper_model}
 
 
 @router.post("/speech")
