@@ -50,7 +50,31 @@ def select_tool(
                 "container_name": container_name,
             }
 
+        url = extract_url(message)
+
+        if url is not None:
+            return "network.reachability", {
+                "target": url,
+            }
+
         port = extract_port(message)
+
+        if (
+            port is not None
+            and any(
+                term in normalized
+                for term in (
+                    "reachable",
+                    "reachability",
+                    "connect",
+                    "connectivity",
+                )
+            )
+        ):
+            return "network.reachability", {
+                "host": "localhost",
+                "port": port,
+            }
 
         if port is not None:
             return "network.port_owner", {
@@ -131,3 +155,16 @@ def extract_container_name(
             return match.group(1)
 
     return None
+
+
+def extract_url(message: str) -> str | None:
+    match = re.search(
+        r"https?://[^\s]+",
+        message,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return match.group(0).rstrip(".,);]}")

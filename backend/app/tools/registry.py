@@ -1,3 +1,4 @@
+from backend.app.tools.reachability import network_reachability
 from backend.app.tools.base import ToolDefinition
 from backend.app.tools.docker import docker_inventory, docker_inspect
 from backend.app.tools.system import system_snapshot
@@ -35,6 +36,16 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=port_owner,
+    ),
+    "network.reachability": ToolDefinition(
+        id="network.reachability",
+        name="Network Reachability",
+        description=(
+            "Read-only HTTP and TCP reachability testing."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=network_reachability,
     ),
     "network.listeners": ToolDefinition(
         id="network.listeners",

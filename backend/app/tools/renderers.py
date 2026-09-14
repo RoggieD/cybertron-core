@@ -211,6 +211,9 @@ def render_verified_tool_result(
     if tool_id == "network.port_owner":
         return render_port_owner(result)
 
+    if tool_id == "network.reachability":
+        return render_reachability(result)
+
     return None
 
 
@@ -304,6 +307,9 @@ def should_return_verified_only(
         return True
 
     if tool_id == "docker.inspect":
+        return True
+
+    if tool_id == "network.reachability":
         return True
 
     return False
@@ -538,5 +544,68 @@ def render_docker_inspect(result: dict) -> str:
                 lines.append(
                     f"- {container_port} -> {display_ip}:{host_port}"
                 )
+
+    return "\n".join(lines)
+
+
+def render_reachability(result: dict) -> str:
+    check_type = result.get("type") or "unknown"
+    target = result.get("target") or "unknown"
+    reachable = bool(result.get("reachable"))
+    latency = result.get("latency_ms")
+
+    lines = [
+        "SERVICE REACHABILITY — VERIFIED",
+        "",
+        f"Target: {target}",
+        f"Reachable: {'yes' if reachable else 'no'}",
+        f"Protocol: {check_type.upper()}",
+    ]
+
+    if check_type == "http":
+        status_code = result.get("status_code")
+        reason = result.get("reason")
+        final_url = result.get("final_url")
+
+        if status_code is not None:
+            status_text = str(status_code)
+
+            if reason:
+                status_text += f" {reason}"
+
+            lines.append(
+                f"HTTP status: {status_text}"
+            )
+
+        if final_url and final_url != target:
+            lines.append(
+                f"Final URL: {final_url}"
+            )
+
+    elif check_type == "tcp":
+        host = result.get("host")
+        port = result.get("port")
+
+        if host:
+            lines.append(f"Host: {host}")
+
+        if port is not None:
+            lines.append(f"Port: {port}")
+
+    if latency is not None:
+        lines.append(
+            f"Latency: {latency} ms"
+        )
+
+    error = result.get("error")
+
+    if error:
+        lines.extend(
+            [
+                "",
+                "Error:",
+                str(error),
+            ]
+        )
 
     return "\n".join(lines)
