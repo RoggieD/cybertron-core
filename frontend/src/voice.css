@@ -127,6 +127,44 @@ body.voice-agent-dragging {
   text-shadow: 0 0 12px currentColor;
 }
 
+.voice-agent-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-agent-heading-actions button {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, currentColor 38%, transparent);
+  background: rgba(0, 0, 0, 0.34);
+  color: currentColor;
+  padding: 3px 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.46rem;
+  letter-spacing: 0.1em;
+}
+
+.voice-agent-heading-actions button:hover {
+  border-color: currentColor;
+  box-shadow: 0 0 9px color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.voice-agent-minimized {
+  height: 42px;
+  min-height: 42px;
+}
+
+.voice-agent-minimized .voice-agent-heading {
+  inset: 10px 12px auto 14px;
+}
+
+.voice-agent-minimized .voice-agent-operation,
+.voice-agent-minimized .voice-agent-canvas,
+.voice-agent-minimized .voice-agent-caption {
+  display: none;
+}
+
 .voice-agent-canvas {
   position: absolute;
   inset: 68px 0 34px 0;

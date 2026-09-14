@@ -38,6 +38,7 @@ const WIDGET_WIDTH = 270;
 const WIDGET_HEIGHT = 330;
 const WIDGET_MARGIN = 12;
 const WIDGET_STORAGE_KEY = "cybertron.voice-agent.position";
+const WIDGET_MINIMIZED_STORAGE_KEY = "cybertron.voice-agent.minimized";
 
 const VOICE_STATES: VoiceVisualState[] = [
   "READY",
@@ -109,6 +110,14 @@ function storedPosition(): WidgetPosition {
   }
 }
 
+function storedMinimized(): boolean {
+  try {
+    return window.localStorage.getItem(WIDGET_MINIMIZED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function displayValue(value: string | undefined, fallback: string) {
   const normalized = value?.trim();
   return normalized && normalized !== "NONE" ? normalized : fallback;
@@ -132,6 +141,7 @@ export default function VoiceAgent3D({
   } | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceVisualState>("OFFLINE");
   const [position, setPosition] = useState<WidgetPosition>(() => storedPosition());
+  const [minimized, setMinimized] = useState(() => storedMinimized());
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
@@ -179,8 +189,12 @@ export default function VoiceAgent3D({
   }, [position]);
 
   useEffect(() => {
+    window.localStorage.setItem(WIDGET_MINIMIZED_STORAGE_KEY, String(minimized));
+  }, [minimized]);
+
+  useEffect(() => {
     const mount = mountRef.current;
-    if (!mount || !active) return;
+    if (!mount || !active || minimized) return;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
@@ -361,7 +375,7 @@ export default function VoiceAgent3D({
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [active]);
+  }, [active, minimized]);
 
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || window.innerWidth <= 900) return;
@@ -411,7 +425,7 @@ export default function VoiceAgent3D({
 
   return (
     <aside
-      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""}`}
+      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""} ${minimized ? "voice-agent-minimized" : ""}`}
       style={{ left: position.x, top: position.y }}
     >
       <div
@@ -424,7 +438,19 @@ export default function VoiceAgent3D({
         title="Drag to move • double-click to reset position"
       >
         <span>VOICE AGENT</span>
-        <strong>{voiceState}</strong>
+        <div className="voice-agent-heading-actions">
+          <strong>{voiceState}</strong>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={() => setMinimized((current) => !current)}
+            aria-label={minimized ? "Restore Voice Agent" : "Minimize Voice Agent"}
+            title={minimized ? "Restore Voice Agent" : "Minimize Voice Agent"}
+          >
+            {minimized ? "OPEN" : "MIN"}
+          </button>
+        </div>
       </div>
       <div className="voice-agent-operation" aria-live="polite">
         <div>
