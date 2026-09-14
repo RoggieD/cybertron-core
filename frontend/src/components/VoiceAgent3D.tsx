@@ -34,11 +34,19 @@ type WidgetPosition = {
   y: number;
 };
 
-const WIDGET_WIDTH = 270;
-const WIDGET_HEIGHT = 330;
+type WidgetSize = {
+  width: number;
+  height: number;
+};
+
+const DEFAULT_WIDGET_SIZE: WidgetSize = { width: 270, height: 330 };
+const MIN_WIDGET_SIZE: WidgetSize = { width: 240, height: 260 };
+const MAX_WIDGET_SIZE: WidgetSize = { width: 520, height: 620 };
 const WIDGET_MARGIN = 12;
+const WIDGET_SNAP_DISTANCE = 28;
 const WIDGET_STORAGE_KEY = "cybertron.voice-agent.position";
 const WIDGET_MINIMIZED_STORAGE_KEY = "cybertron.voice-agent.minimized";
+const WIDGET_SIZE_STORAGE_KEY = "cybertron.voice-agent.size";
 
 const VOICE_STATES: VoiceVisualState[] = [
   "READY",
@@ -77,9 +85,22 @@ function paletteForState(state: VoiceVisualState) {
   }
 }
 
-function clampPosition(position: WidgetPosition): WidgetPosition {
-  const maxX = Math.max(WIDGET_MARGIN, window.innerWidth - WIDGET_WIDTH - WIDGET_MARGIN);
-  const maxY = Math.max(WIDGET_MARGIN, window.innerHeight - WIDGET_HEIGHT - WIDGET_MARGIN);
+function clampSize(size: WidgetSize): WidgetSize {
+  return {
+    width: Math.min(
+      Math.max(size.width, MIN_WIDGET_SIZE.width),
+      Math.min(MAX_WIDGET_SIZE.width, window.innerWidth - WIDGET_MARGIN * 2),
+    ),
+    height: Math.min(
+      Math.max(size.height, MIN_WIDGET_SIZE.height),
+      Math.min(MAX_WIDGET_SIZE.height, window.innerHeight - WIDGET_MARGIN * 2),
+    ),
+  };
+}
+
+function clampPosition(position: WidgetPosition, size: WidgetSize): WidgetPosition {
+  const maxX = Math.max(WIDGET_MARGIN, window.innerWidth - size.width - WIDGET_MARGIN);
+  const maxY = Math.max(WIDGET_MARGIN, window.innerHeight - size.height - WIDGET_MARGIN);
 
   return {
     x: Math.min(Math.max(position.x, WIDGET_MARGIN), maxX),
@@ -87,27 +108,61 @@ function clampPosition(position: WidgetPosition): WidgetPosition {
   };
 }
 
-function defaultPosition(): WidgetPosition {
+function defaultPosition(size: WidgetSize): WidgetPosition {
   return clampPosition({
-    x: window.innerWidth - WIDGET_WIDTH - 22,
-    y: window.innerHeight - WIDGET_HEIGHT - 22,
-  });
+    x: window.innerWidth - size.width - 22,
+    y: window.innerHeight - size.height - 22,
+  }, size);
 }
 
-function storedPosition(): WidgetPosition {
+function storedSize(): WidgetSize {
+  try {
+    const raw = window.localStorage.getItem(WIDGET_SIZE_STORAGE_KEY);
+    if (!raw) return DEFAULT_WIDGET_SIZE;
+
+    const parsed = JSON.parse(raw) as Partial<WidgetSize>;
+    if (typeof parsed.width !== "number" || typeof parsed.height !== "number") {
+      return DEFAULT_WIDGET_SIZE;
+    }
+    return clampSize({ width: parsed.width, height: parsed.height });
+  } catch {
+    return DEFAULT_WIDGET_SIZE;
+  }
+}
+
+function storedPosition(size: WidgetSize): WidgetPosition {
   try {
     const raw = window.localStorage.getItem(WIDGET_STORAGE_KEY);
-    if (!raw) return defaultPosition();
+    if (!raw) return defaultPosition(size);
 
     const parsed = JSON.parse(raw) as Partial<WidgetPosition>;
     if (typeof parsed.x !== "number" || typeof parsed.y !== "number") {
-      return defaultPosition();
+      return defaultPosition(size);
     }
 
-    return clampPosition({ x: parsed.x, y: parsed.y });
+    return clampPosition({ x: parsed.x, y: parsed.y }, size);
   } catch {
-    return defaultPosition();
+    return defaultPosition(size);
   }
+}
+
+function snapPosition(position: WidgetPosition, size: WidgetSize): WidgetPosition {
+  const clamped = clampPosition(position, size);
+  const right = window.innerWidth - size.width - WIDGET_MARGIN;
+  const bottom = window.innerHeight - size.height - WIDGET_MARGIN;
+
+  return {
+    x: clamped.x <= WIDGET_MARGIN + WIDGET_SNAP_DISTANCE
+      ? WIDGET_MARGIN
+      : clamped.x >= right - WIDGET_SNAP_DISTANCE
+        ? right
+        : clamped.x,
+    y: clamped.y <= WIDGET_MARGIN + WIDGET_SNAP_DISTANCE
+      ? WIDGET_MARGIN
+      : clamped.y >= bottom - WIDGET_SNAP_DISTANCE
+        ? bottom
+        : clamped.y,
+  };
 }
 
 function storedMinimized(): boolean {
@@ -139,8 +194,16 @@ export default function VoiceAgent3D({
     offsetX: number;
     offsetY: number;
   } | null>(null);
+  const resizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceVisualState>("OFFLINE");
-  const [position, setPosition] = useState<WidgetPosition>(() => storedPosition());
+  const [size, setSize] = useState<WidgetSize>(() => storedSize());
+  const [position, setPosition] = useState<WidgetPosition>(() => storedPosition(size));
   const [minimized, setMinimized] = useState(() => storedMinimized());
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
@@ -179,7 +242,13 @@ export default function VoiceAgent3D({
   }, [active, controlledVoiceState]);
 
   useEffect(() => {
-    const onResize = () => setPosition((current) => clampPosition(current));
+    const onResize = () => {
+      setSize((current) => {
+        const next = clampSize(current);
+        setPosition((currentPosition) => clampPosition(currentPosition, next));
+        return next;
+      });
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -187,6 +256,10 @@ export default function VoiceAgent3D({
   useEffect(() => {
     window.localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(position));
   }, [position]);
+
+  useEffect(() => {
+    window.localStorage.setItem(WIDGET_SIZE_STORAGE_KEY, JSON.stringify(size));
+  }, [size]);
 
   useEffect(() => {
     window.localStorage.setItem(WIDGET_MINIMIZED_STORAGE_KEY, String(minimized));
@@ -402,7 +475,7 @@ export default function VoiceAgent3D({
       clampPosition({
         x: event.clientX - drag.offsetX,
         y: event.clientY - drag.offsetY,
-      }),
+      }, minimized ? { width: size.width, height: 42 } : size),
     );
   }
 
@@ -415,10 +488,52 @@ export default function VoiceAgent3D({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     document.body.classList.remove("voice-agent-dragging");
+    setPosition((current) => snapPosition(
+      current,
+      minimized ? { width: size.width, height: 42 } : size,
+    ));
   }
 
   function resetPosition() {
-    setPosition(defaultPosition());
+    setPosition(defaultPosition(size));
+  }
+
+  function beginResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || minimized) return;
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: size.width,
+      startHeight: size.height,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add("voice-agent-resizing");
+  }
+
+  function continueResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    const resize = resizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+
+    const next = clampSize({
+      width: resize.startWidth + event.clientX - resize.startX,
+      height: resize.startHeight + event.clientY - resize.startY,
+    });
+    const available = {
+      width: Math.min(next.width, window.innerWidth - position.x - WIDGET_MARGIN),
+      height: Math.min(next.height, window.innerHeight - position.y - WIDGET_MARGIN),
+    };
+    setSize(clampSize(available));
+  }
+
+  function endResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    const resize = resizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    resizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    document.body.classList.remove("voice-agent-resizing");
   }
 
   if (!active) return null;
@@ -426,7 +541,12 @@ export default function VoiceAgent3D({
   return (
     <aside
       className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""} ${minimized ? "voice-agent-minimized" : ""}`}
-      style={{ left: position.x, top: position.y }}
+      style={{
+        left: position.x,
+        top: position.y,
+        width: size.width,
+        height: minimized ? 42 : size.height,
+      }}
     >
       <div
         className="voice-agent-heading voice-agent-drag-handle"
@@ -478,6 +598,18 @@ export default function VoiceAgent3D({
         <i>→</i>
         <span>KOKORO</span>
       </div>
+      {!minimized && (
+        <button
+          type="button"
+          className="voice-agent-resize-handle"
+          onPointerDown={beginResize}
+          onPointerMove={continueResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          aria-label="Resize Voice Agent"
+          title="Drag to resize"
+        />
+      )}
     </aside>
   );
 }

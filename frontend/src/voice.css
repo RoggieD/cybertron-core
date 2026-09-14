@@ -165,6 +165,34 @@ body.voice-agent-dragging {
   display: none;
 }
 
+.voice-agent-resize-handle {
+  position: absolute;
+  z-index: 5;
+  right: 1px;
+  bottom: 1px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background:
+    linear-gradient(135deg, transparent 48%, currentColor 49%, currentColor 54%, transparent 55%) 5px 5px / 9px 9px no-repeat,
+    linear-gradient(135deg, transparent 48%, currentColor 49%, currentColor 54%, transparent 55%) 9px 9px / 9px 9px no-repeat;
+  color: currentColor;
+  cursor: nwse-resize;
+  opacity: 0.55;
+  touch-action: none;
+}
+
+.voice-agent-resize-handle:hover {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+body.voice-agent-resizing {
+  cursor: nwse-resize;
+  user-select: none;
+}
+
 .voice-agent-canvas {
   position: absolute;
   inset: 68px 0 34px 0;
