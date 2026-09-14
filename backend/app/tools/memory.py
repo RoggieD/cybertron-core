@@ -14,6 +14,123 @@ PUBLIC_AGENT_SCOPES = {
 }
 
 
+def _normalize_memory_text(
+    value: str,
+) -> str:
+    import re
+
+    return re.sub(
+        r"[^a-z0-9]+",
+        "",
+        value.lower(),
+    )
+
+
+def _memory_query_tokens(
+    query: str,
+) -> list[str]:
+    import re
+
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "about",
+        "anything",
+        "for",
+        "in",
+        "of",
+        "on",
+        "the",
+        "to",
+        "your",
+    }
+
+    raw = re.findall(
+        r"[a-z0-9]+",
+        query.lower(),
+    )
+
+    tokens = [
+        token
+        for token in raw
+        if token not in stopwords
+    ]
+
+    # C.O.R.E. becomes c,o,r,e with ordinary tokenization.
+    # Preserve the collapsed form as a useful deterministic
+    # search token.
+    collapsed = _normalize_memory_text(
+        query
+    )
+
+    if (
+        len(raw) > 1
+        and all(
+            len(token) == 1
+            for token in raw
+        )
+        and collapsed
+    ):
+        return [collapsed]
+
+    return tokens or (
+        [collapsed]
+        if collapsed
+        else []
+    )
+
+
+def _matches_memory_query(
+    memory: dict,
+    query: str,
+) -> bool:
+    tokens = _memory_query_tokens(
+        query
+    )
+
+    if not tokens:
+        return True
+
+    searchable = " ".join(
+        [
+            str(
+                memory.get(
+                    "content",
+                    "",
+                )
+            ),
+            " ".join(
+                memory.get("tags")
+                or []
+            ),
+            str(
+                memory.get(
+                    "source",
+                    "",
+                )
+                or ""
+            ),
+            str(
+                memory.get(
+                    "namespace",
+                    "",
+                )
+            ),
+        ]
+    )
+
+    normalized = _normalize_memory_text(
+        searchable
+    )
+
+    return all(
+        _normalize_memory_text(token)
+        in normalized
+        for token in tokens
+    )
+
+
 def _default_store() -> MemoryStore:
     return MemoryStore(
         "data/cybertron.db"
@@ -119,17 +236,44 @@ def _memory_search(
             "memories": [],
         }
 
+    requested_limit = max(
+        1,
+        min(limit, 100),
+    )
+
     memories = store.search(
         query=query,
         namespace=namespace,
         scope=scope,
         kind=kind,
         tags=tags,
-        limit=max(
-            1,
-            min(limit, 100),
-        ),
+        limit=requested_limit,
     )
+
+    # SQLite LIKE remains the fast path. If the query is
+    # semantically simple but not a literal substring,
+    # perform deterministic normalized token matching over
+    # the allowed scope.
+    if query and not memories:
+        candidates = store.search(
+            query=None,
+            namespace=namespace,
+            scope=scope,
+            kind=kind,
+            tags=tags,
+            limit=500,
+        )
+
+        memories = [
+            memory
+            for memory in candidates
+            if _matches_memory_query(
+                memory,
+                query,
+            )
+        ][
+            :requested_limit
+        ]
 
     return {
         "allowed": True,
