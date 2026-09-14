@@ -1,6 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { getHealth } from "./api/core";
+import {
+  getStatusOverview,
+  type StatusOverview
+} from "./api/status";
 import { streamChat, type StreamEvent } from "./api/chat";
 import {
   connectCoreWebSocket,
@@ -17,6 +21,18 @@ type ReactorState =
   | "THINKING"
   | "COMPLETE"
   | "ERROR";
+
+function formatUptime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+
+  return `${hours}h ${minutes}m`;
+}
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState("CHECKING");
@@ -37,6 +53,41 @@ export default function App() {
 
   const [traceId, setTraceId] = useState<string | null>(null);
   const [traceEventCount, setTraceEventCount] = useState(0);
+
+  const [overview, setOverview] =
+    useState<StatusOverview | null>(null);
+  const [overviewError, setOverviewError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const data = await getStatusOverview();
+
+        if (active) {
+          setOverview(data);
+          setOverviewError(false);
+        }
+      } catch {
+        if (active) {
+          setOverviewError(true);
+        }
+      }
+    };
+
+    void refresh();
+
+    const timer = window.setInterval(
+      () => void refresh(),
+      5000
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     void getHealth()
@@ -286,6 +337,120 @@ export default function App() {
               C.O.R.E. awaiting input.
             </p>
           )}
+        </div>
+      </section>
+
+      <section className="telemetry-panel">
+        <div className="telemetry-header">
+          <div>
+            <span>LIVE SYSTEM TELEMETRY</span>
+            <strong>
+              {overview?.system.hostname ?? "ACQUIRING..."}
+            </strong>
+          </div>
+
+          <div
+            className={
+              overviewError
+                ? "telemetry-state warning"
+                : "telemetry-state online"
+            }
+          >
+            {overviewError ? "LINK ERROR" : "LIVE"}
+          </div>
+        </div>
+
+        <div className="telemetry-grid">
+          <article className="telemetry-card">
+            <span>CPU</span>
+            <strong>
+              {overview
+                ? `${overview.system.cpu.usage_percent}%`
+                : "--"}
+            </strong>
+            <div className="meter">
+              <div
+                style={{
+                  width: `${overview?.system.cpu.usage_percent ?? 0}%`
+                }}
+              />
+            </div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>MEMORY</span>
+            <strong>
+              {overview
+                ? `${overview.system.memory.usage_percent}%`
+                : "--"}
+            </strong>
+            <div className="meter">
+              <div
+                style={{
+                  width: `${overview?.system.memory.usage_percent ?? 0}%`
+                }}
+              />
+            </div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>DISK</span>
+            <strong>
+              {overview
+                ? `${overview.system.disk.usage_percent}%`
+                : "--"}
+            </strong>
+            <div className="meter">
+              <div
+                style={{
+                  width: `${overview?.system.disk.usage_percent ?? 0}%`
+                }}
+              />
+            </div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>UPTIME</span>
+            <strong>
+              {overview
+                ? formatUptime(overview.system.uptime_seconds)
+                : "--"}
+            </strong>
+          </article>
+
+          <article className="telemetry-card">
+            <span>DOCKER</span>
+            <strong>
+              {overview
+                ? `${overview.docker.running}/${overview.docker.total}`
+                : "--"}
+            </strong>
+            <small>RUNNING</small>
+          </article>
+
+          <article className="telemetry-card">
+            <span>SERVICES</span>
+            <strong
+              className={
+                overview?.services.unreachable === 0
+                  ? "online"
+                  : "warning"
+              }
+            >
+              {overview
+                ? `${overview.services.reachable}/${overview.services.total}`
+                : "--"}
+            </strong>
+            <small>HEALTHY</small>
+          </article>
+
+          <article className="telemetry-card">
+            <span>LISTENERS</span>
+            <strong>
+              {overview?.network.listeners ?? "--"}
+            </strong>
+            <small>ACTIVE SOCKETS</small>
+          </article>
         </div>
       </section>
 
