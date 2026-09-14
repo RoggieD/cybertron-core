@@ -13,7 +13,7 @@ import {
   connectCoreWebSocket,
   type CoreEvent,
 } from "../api/websocket";
-import VoiceAgent3D from "../components/VoiceAgent3D";
+import type { VoiceAgentRuntimeState } from "../components/VoiceAgent3D";
 
 import "../styles.css";
 import "../voice.css";
@@ -157,7 +157,13 @@ function hasVerifiedToolHeader(text: string): boolean {
   ].some((heading) => opening.includes(heading));
 }
 
-export default function DashboardPage() {
+type DashboardPageProps = {
+  onVoiceAgentStateChange?: (state: VoiceAgentRuntimeState) => void;
+};
+
+export default function DashboardPage({
+  onVoiceAgentStateChange,
+}: DashboardPageProps) {
   const [apiStatus, setApiStatus] = useState("CHECKING");
   const [socketConnected, setSocketConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<CoreEvent | null>(null);
@@ -662,15 +668,27 @@ export default function DashboardPage() {
     "SPEAKING",
   ].includes(voiceState);
 
+  useEffect(() => {
+    onVoiceAgentStateChange?.({
+      activeAgent,
+      activeTool,
+      activeModel,
+      orchestrationState: displayedReactorState,
+      speechAnalyser,
+      voiceState,
+    });
+  }, [
+    activeAgent,
+    activeModel,
+    activeTool,
+    displayedReactorState,
+    onVoiceAgentStateChange,
+    speechAnalyser,
+    voiceState,
+  ]);
+
   return (
     <main className="core-shell">
-      <VoiceAgent3D
-        activeAgent={activeAgent}
-        activeTool={activeTool}
-        activeModel={activeModel}
-        orchestrationState={displayedReactorState}
-        speechAnalyser={speechAnalyser}
-      />
       <section className="header">
         <p className="eyebrow">CYBERTRON SYSTEMS</p>
         <h1>

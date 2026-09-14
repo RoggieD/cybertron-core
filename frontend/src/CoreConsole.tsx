@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
+import VoiceAgent3D, {
+  type VoiceAgentRuntimeState,
+} from "./components/VoiceAgent3D";
 import DashboardPage from "./pages/DashboardPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import MemoryPage from "./pages/MemoryPage";
@@ -29,10 +32,25 @@ const PAGE_TITLES: Record<CorePage, string> = {
   memory: "Memory",
 };
 
+const INITIAL_VOICE_AGENT_STATE: VoiceAgentRuntimeState = {
+  activeAgent: "STANDBY",
+  activeTool: "NONE",
+  activeModel: "UNKNOWN",
+  orchestrationState: "IDLE",
+  speechAnalyser: null,
+  voiceState: "OFFLINE",
+};
+
 export default function CoreConsole() {
   const [page, setPage] = useState<CorePage>(() =>
     pageFromPath(window.location.pathname),
   );
+  const [voiceAgentState, setVoiceAgentState] = useState<VoiceAgentRuntimeState>(
+    INITIAL_VOICE_AGENT_STATE,
+  );
+  const updateVoiceAgentState = useCallback((state: VoiceAgentRuntimeState) => {
+    setVoiceAgentState(state);
+  }, []);
 
   useEffect(() => {
     document.body.dataset.corePage = page;
@@ -41,6 +59,17 @@ export default function CoreConsole() {
     return () => {
       delete document.body.dataset.corePage;
     };
+  }, [page]);
+
+  useEffect(() => {
+    if (page === "dashboard") return;
+
+    setVoiceAgentState((current) => ({
+      ...current,
+      orchestrationState: "IDLE",
+      speechAnalyser: null,
+      voiceState: current.voiceState === "OFFLINE" ? "OFFLINE" : "READY",
+    }));
   }, [page]);
 
   useEffect(() => {
@@ -64,7 +93,10 @@ export default function CoreConsole() {
   return (
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
-      {page === "dashboard" && <DashboardPage />}
+      <VoiceAgent3D {...voiceAgentState} />
+      {page === "dashboard" && (
+        <DashboardPage onVoiceAgentStateChange={updateVoiceAgentState} />
+      )}
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}
       {page === "services" && <ServicesPage />}

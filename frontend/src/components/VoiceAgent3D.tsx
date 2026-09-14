@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
-type VoiceVisualState =
+export type VoiceVisualState =
   | "READY"
   | "LISTENING"
   | "TRANSCRIBING"
@@ -17,6 +17,16 @@ type VoiceAgent3DProps = {
   activeModel?: string;
   orchestrationState?: string;
   speechAnalyser?: AnalyserNode | null;
+  voiceState?: VoiceVisualState;
+};
+
+export type VoiceAgentRuntimeState = {
+  activeAgent: string;
+  activeTool: string;
+  activeModel: string;
+  orchestrationState: string;
+  speechAnalyser: AnalyserNode | null;
+  voiceState: VoiceVisualState;
 };
 
 type WidgetPosition = {
@@ -111,6 +121,7 @@ export default function VoiceAgent3D({
   activeModel,
   orchestrationState = "IDLE",
   speechAnalyser = null,
+  voiceState: controlledVoiceState,
 }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
@@ -132,6 +143,12 @@ export default function VoiceAgent3D({
   useEffect(() => {
     if (!active) return;
 
+    if (controlledVoiceState) {
+      visualStateRef.current = controlledVoiceState;
+      setVoiceState(controlledVoiceState);
+      return;
+    }
+
     const update = () => {
       const next = readVoiceState();
       visualStateRef.current = next;
@@ -149,7 +166,7 @@ export default function VoiceAgent3D({
     });
 
     return () => observer.disconnect();
-  }, [active]);
+  }, [active, controlledVoiceState]);
 
   useEffect(() => {
     const onResize = () => setPosition((current) => clampPosition(current));
