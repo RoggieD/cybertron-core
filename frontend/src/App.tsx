@@ -6,11 +6,13 @@ import {
   getServiceStatus,
   getTelemetryHistory,
   getIncidents,
+  getIncidentAnalytics,
   acknowledgeIncident,
   getIncidentTimeline,
   searchIncidents,
   downloadIncidentCsv,
   type IncidentTimeline,
+  type IncidentAnalytics,
   type StatusOverview,
   type ServiceHealthItem,
   type IncidentEvent
@@ -207,6 +209,8 @@ export default function App() {
     useState<"all" | "warning" | "critical" | "info">("all");
   const [selectedIncident, setSelectedIncident] =
     useState<IncidentTimeline | null>(null);
+  const [incidentAnalytics, setIncidentAnalytics] =
+    useState<IncidentAnalytics | null>(null);
   const [incidentSearch, setIncidentSearch] =
     useState("");
   const [incidentSearchBusy, setIncidentSearchBusy] =
@@ -445,6 +449,34 @@ export default function App() {
     const timer = window.setInterval(
       () => void refreshIncidents(),
       5000
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshAnalytics = async () => {
+      try {
+        const data = await getIncidentAnalytics();
+
+        if (active) {
+          setIncidentAnalytics(data);
+        }
+      } catch {
+        // Analytics failure should not affect operations UI.
+      }
+    };
+
+    void refreshAnalytics();
+
+    const timer = window.setInterval(
+      () => void refreshAnalytics(),
+      15000
     );
 
     return () => {
@@ -830,6 +862,71 @@ export default function App() {
             </strong>
             <small>ACTIVE SOCKETS</small>
           </article>
+        </div>
+      </section>
+
+      <section className="incident-analytics-panel">
+        <div className="incident-analytics-header">
+          <div>
+            <span>INCIDENT ANALYTICS</span>
+            <strong>OPERATIONAL HISTORY</strong>
+          </div>
+        </div>
+
+        <div className="incident-analytics-grid">
+          <article>
+            <span>TOTAL EVENTS</span>
+            <strong>
+              {incidentAnalytics?.total_events ?? "--"}
+            </strong>
+          </article>
+
+          <article>
+            <span>OPENED</span>
+            <strong>
+              {incidentAnalytics?.opened_events ?? "--"}
+            </strong>
+          </article>
+
+          <article>
+            <span>RESOLVED</span>
+            <strong>
+              {incidentAnalytics?.resolved_events ?? "--"}
+            </strong>
+          </article>
+
+          <article>
+            <span>ACKNOWLEDGED</span>
+            <strong>
+              {incidentAnalytics?.acknowledged_events ?? "--"}
+            </strong>
+          </article>
+
+          <article>
+            <span>AVG RESOLUTION</span>
+            <strong>
+              {incidentAnalytics
+                ? `${incidentAnalytics.average_resolution_seconds.toFixed(
+                    1
+                  )} sec`
+                : "--"}
+            </strong>
+          </article>
+        </div>
+
+        <div className="incident-top-list">
+          <span>TOP RECURRING INCIDENTS</span>
+
+          {incidentAnalytics?.top_incidents.length ? (
+            incidentAnalytics.top_incidents.map((item) => (
+              <div key={item.incident_id}>
+                <strong>{item.incident_id}</strong>
+                <span>{item.occurrences} occurrence(s)</span>
+              </div>
+            ))
+          ) : (
+            <small>No recurring incidents recorded.</small>
+          )}
         </div>
       </section>
 

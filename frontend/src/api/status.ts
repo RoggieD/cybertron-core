@@ -263,3 +263,34 @@ export function downloadIncidentCsv(
     )}`;
 }
 
+
+export type IncidentAnalytics = {
+  total_events: number;
+  opened_events: number;
+  resolved_events: number;
+  acknowledged_events: number;
+  critical_opened: number;
+  warning_opened: number;
+  average_resolution_seconds: number;
+  resolved_samples: number;
+  top_incidents: {
+    incident_id: string;
+    occurrences: number;
+  }[];
+};
+
+export async function getIncidentAnalytics(): Promise<IncidentAnalytics> {
+  const host = window.location.hostname;
+
+  const response = await fetch(
+    `http://${host}:8000/api/status/incidents/analytics`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Incident analytics returned ${response.status}`
+    );
+  }
+
+  return response.json();
+}

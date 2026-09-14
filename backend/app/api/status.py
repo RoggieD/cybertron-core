@@ -156,3 +156,12 @@ async def status_incident_export(
         },
     )
 
+
+
+@router.get("/incidents/analytics")
+async def status_incident_analytics() -> dict:
+    from backend.app.telemetry.incidents import (
+        incident_analytics,
+    )
+
+    return incident_analytics()

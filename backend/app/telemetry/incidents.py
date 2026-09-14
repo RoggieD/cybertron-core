@@ -522,3 +522,132 @@ def search_incidents(
         for row in rows
     ]
 
+
+
+def incident_analytics() -> dict:
+    initialize()
+
+    with _connect() as connection:
+        total = connection.execute(
+            "SELECT COUNT(*) FROM incidents"
+        ).fetchone()[0]
+
+        opened = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM incidents
+            WHERE state = 'opened'
+            """
+        ).fetchone()[0]
+
+        resolved = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM incidents
+            WHERE state = 'resolved'
+            """
+        ).fetchone()[0]
+
+        acknowledged = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM incidents
+            WHERE state = 'acknowledged'
+            """
+        ).fetchone()[0]
+
+        critical = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM incidents
+            WHERE severity = 'critical'
+              AND state = 'opened'
+            """
+        ).fetchone()[0]
+
+        warning = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM incidents
+            WHERE severity = 'warning'
+              AND state = 'opened'
+            """
+        ).fetchone()[0]
+
+        recurring_rows = connection.execute(
+            """
+            SELECT
+                incident_id,
+                COUNT(*) AS occurrences
+            FROM incidents
+            WHERE state = 'opened'
+            GROUP BY incident_id
+            ORDER BY occurrences DESC, incident_id
+            LIMIT 5
+            """
+        ).fetchall()
+
+        resolved_rows = connection.execute(
+            """
+            SELECT
+                r.incident_id,
+                r.timestamp AS resolved_at,
+                (
+                    SELECT o.timestamp
+                    FROM incidents o
+                    WHERE o.incident_id = r.incident_id
+                      AND o.state = 'opened'
+                      AND o.id < r.id
+                    ORDER BY o.id DESC
+                    LIMIT 1
+                ) AS opened_at
+            FROM incidents r
+            WHERE r.state = 'resolved'
+            """
+        ).fetchall()
+
+    durations = []
+
+    for row in resolved_rows:
+        if not row["opened_at"]:
+            continue
+
+        try:
+            opened_at = datetime.fromisoformat(
+                row["opened_at"]
+            )
+            resolved_at = datetime.fromisoformat(
+                row["resolved_at"]
+            )
+
+            durations.append(
+                (
+                    resolved_at - opened_at
+                ).total_seconds()
+            )
+        except ValueError:
+            continue
+
+    average_duration = (
+        round(sum(durations) / len(durations), 2)
+        if durations
+        else 0.0
+    )
+
+    return {
+        "total_events": total,
+        "opened_events": opened,
+        "resolved_events": resolved,
+        "acknowledged_events": acknowledged,
+        "critical_opened": critical,
+        "warning_opened": warning,
+        "average_resolution_seconds": average_duration,
+        "resolved_samples": len(durations),
+        "top_incidents": [
+            {
+                "incident_id": row["incident_id"],
+                "occurrences": row["occurrences"],
+            }
+            for row in recurring_rows
+        ],
+    }
