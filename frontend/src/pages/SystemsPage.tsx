@@ -6,8 +6,13 @@ import {
   getTelemetryHistory,
   type StatusOverview,
 } from "../api/status";
+import {
+  getSecurityPolicyEvaluation,
+  type SecurityPolicyEvaluation,
+} from "../api/security";
 
 import "../styles.css";
+import "../security-policy.css";
 
 type TelemetrySample = {
   timestamp: number;
@@ -66,11 +71,25 @@ function formatUptime(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function EndpointList({ endpoints }: { endpoints: string[] }) {
+  if (!endpoints.length) return <small>NONE DETECTED</small>;
+
+  return (
+    <ul>
+      {endpoints.map((endpoint) => (
+        <li key={endpoint}>{endpoint}</li>
+      ))}
+    </ul>
+  );
+}
+
 export default function SystemsPage() {
   const [overview, setOverview] = useState<StatusOverview | null>(null);
   const [overviewError, setOverviewError] = useState(false);
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetrySample[]>([]);
   const [telemetryRange, setTelemetryRange] = useState<TelemetryRange>("2m");
+  const [securityPolicy, setSecurityPolicy] = useState<SecurityPolicyEvaluation | null>(null);
+  const [securityPolicyError, setSecurityPolicyError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -117,6 +136,16 @@ export default function SystemsPage() {
         setOverview(data);
         setOverviewError(false);
 
+        try {
+          const policy = await getSecurityPolicyEvaluation(data.system.hostname);
+          if (active) {
+            setSecurityPolicy(policy);
+            setSecurityPolicyError(false);
+          }
+        } catch {
+          if (active) setSecurityPolicyError(true);
+        }
+
         const latencyValues = serviceData.services
           .map((service) => service.latency_ms)
           .filter((value): value is number => typeof value === "number");
@@ -153,6 +182,26 @@ export default function SystemsPage() {
       window.clearInterval(timer);
     };
   }, [telemetryRange]);
+
+  const unexpected = securityPolicy?.unexpected_public_listener_endpoints ?? [];
+  const missing = securityPolicy?.missing_approved_public_listener_endpoints ?? [];
+  const approved = securityPolicy?.approved_public_listener_endpoints ?? [];
+  const policyState = securityPolicyError
+    ? "POLICY LINK ERROR"
+    : !securityPolicy
+      ? "ACQUIRING"
+      : unexpected.length
+        ? "POLICY DRIFT"
+        : missing.length
+          ? "SERVICE DRIFT"
+          : securityPolicy.approved_configured
+            ? "APPROVED / CLEAN"
+            : "LEARNED ONLY";
+  const policyStateClass = securityPolicyError || unexpected.length
+    ? "alert"
+    : missing.length || !securityPolicy?.approved_configured
+      ? "warning"
+      : "approved";
 
   return (
     <main className="core-shell">
@@ -220,6 +269,40 @@ export default function SystemsPage() {
             <small>ACTIVE SOCKETS</small>
           </article>
         </div>
+      </section>
+
+      <section className="security-policy-panel">
+        <div className="security-policy-header">
+          <div>
+            <span>DEFENSIVE LISTENER POLICY</span>
+            <strong>{securityPolicy?.hostname ?? overview?.system.hostname ?? "ACQUIRING..."}</strong>
+          </div>
+          <div className={`security-policy-state ${policyStateClass}`}>{policyState}</div>
+        </div>
+
+        <div className="security-policy-grid">
+          <article className="security-policy-card">
+            <span>APPROVED PUBLIC LISTENERS</span>
+            <strong>{securityPolicy?.approved_public_listener_count ?? "--"}</strong>
+            <EndpointList endpoints={approved} />
+          </article>
+
+          <article className="security-policy-card unexpected">
+            <span>UNEXPECTED PUBLIC LISTENERS</span>
+            <strong>{unexpected.length}</strong>
+            <EndpointList endpoints={unexpected} />
+          </article>
+
+          <article className="security-policy-card missing">
+            <span>MISSING APPROVED LISTENERS</span>
+            <strong>{missing.length}</strong>
+            <EndpointList endpoints={missing} />
+          </article>
+        </div>
+
+        <p className="security-policy-note">
+          {securityPolicy?.note ?? "Waiting for authoritative listener policy state."}
+        </p>
       </section>
 
       <section className="trend-panel">
