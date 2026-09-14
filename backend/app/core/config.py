@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     port: int = 8000
     ollama_base_url: str = "http://localhost:11434"
     ollama_num_predict: int = 4096
+    ollama_num_ctx: int = 32768
     database_url: str = "sqlite:///./data/cybertron.db"
 
     model_config = SettingsConfigDict(
