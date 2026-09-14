@@ -52,8 +52,8 @@ async def security_snapshot() -> dict:
     """Build a deterministic, local defensive posture snapshot.
 
     Observation is read-only with respect to the host. C.O.R.E. records the
-    snapshot as defensive telemetry so later assessments can detect meaningful
-    exposure changes without treating ordinary process churn as an alert.
+    snapshot as defensive telemetry and maintains an expected public-listener
+    baseline so new exposure can be separated from already-observed exposure.
     """
 
     system, listeners, processes = await asyncio.gather(
@@ -63,16 +63,17 @@ async def security_snapshot() -> dict:
     )
 
     findings: list[dict] = []
+    all_listeners = listeners.get("listeners", [])
 
     public_listeners = [
         listener
-        for listener in listeners.get("listeners", [])
+        for listener in all_listeners
         if listener.get("address") in PUBLIC_BIND_ADDRESSES
     ]
 
     unknown_owner_listeners = [
         listener
-        for listener in listeners.get("listeners", [])
+        for listener in all_listeners
         if not listener.get("process")
     ]
 
@@ -86,8 +87,9 @@ async def security_snapshot() -> dict:
                 "evidence_count": len(public_listeners),
                 "evidence": public_listeners[:20],
                 "interpretation": (
-                    "These listeners are reachable on every configured local "
-                    "interface unless constrained by host or upstream firewall policy."
+                    "These sockets are bound to every configured local interface. "
+                    "Remote reachability still depends on host and upstream firewall "
+                    "policy; an all-interface bind alone does not prove Internet exposure."
                 ),
             }
         )
@@ -181,48 +183,84 @@ async def security_snapshot() -> dict:
         "attention_score": base_score,
         "evidence": evidence,
         "raw_evidence": {
-            "listeners": listeners.get("listeners", []),
+            "listeners": all_listeners,
             "processes": processes.get("processes", []),
         },
     }
 
-    baseline_comparison = await security_baseline_store.compare_and_record(
-        telemetry_record
+    baseline_comparison, expected_listener_policy = await asyncio.gather(
+        security_baseline_store.compare_and_record(telemetry_record),
+        security_baseline_store.compare_expected_public_listeners(
+            evidence.get("hostname"),
+            generated_at,
+            all_listeners,
+        ),
     )
 
+    unexpected_public = expected_listener_policy.get(
+        "unexpected_public_listener_endpoints", []
+    )
+    missing_expected_public = expected_listener_policy.get(
+        "missing_expected_public_listener_endpoints", []
+    )
+
+    if unexpected_public:
+        findings.append(
+            {
+                "id": "unexpected-public-listener",
+                "severity": "high",
+                "category": "expected-state-drift",
+                "title": "Unexpected all-interface listener detected",
+                "evidence_count": len(unexpected_public),
+                "evidence": unexpected_public,
+                "interpretation": (
+                    "These all-interface listener endpoints are not present in the "
+                    "host's learned expected-listener baseline. Validate the service "
+                    "and exposure before treating it as approved."
+                ),
+            }
+        )
+
+    if missing_expected_public:
+        findings.append(
+            {
+                "id": "expected-public-listener-missing",
+                "severity": "low",
+                "category": "expected-state-drift",
+                "title": "Expected public listener is no longer present",
+                "evidence_count": len(missing_expected_public),
+                "evidence": missing_expected_public,
+                "interpretation": (
+                    "One or more previously expected all-interface listeners are absent. "
+                    "This may be normal maintenance or a stopped service and should be "
+                    "correlated with service health."
+                ),
+            }
+        )
+
     if baseline_comparison.get("has_previous_baseline"):
-        new_public = baseline_comparison.get("new_public_listener_endpoints", [])
         new_endpoints = baseline_comparison.get("new_listener_endpoints", [])
         removed_endpoints = baseline_comparison.get("removed_listener_endpoints", [])
         posture_changed = bool(baseline_comparison.get("posture_changed"))
         score_delta = int(baseline_comparison.get("attention_score_delta") or 0)
 
-        if new_public:
-            findings.append(
-                {
-                    "id": "new-public-exposure",
-                    "severity": "high",
-                    "category": "change-detection",
-                    "title": "New externally bound listener detected",
-                    "evidence_count": len(new_public),
-                    "evidence": new_public,
-                    "interpretation": (
-                        "A listener now exists on an all-interface bind that was not "
-                        "present in the immediately previous defensive snapshot. "
-                        "Validate that the service and exposure are expected."
-                    ),
-                }
-            )
-        elif new_endpoints or posture_changed or score_delta > 0:
+        non_public_new = [
+            endpoint
+            for endpoint in new_endpoints
+            if endpoint
+            not in baseline_comparison.get("new_public_listener_endpoints", [])
+        ]
+
+        if non_public_new or posture_changed or score_delta > 0:
             findings.append(
                 {
                     "id": "security-relevant-change",
                     "severity": "medium",
                     "category": "change-detection",
                     "title": "Security-relevant host state changed",
-                    "evidence_count": len(new_endpoints),
+                    "evidence_count": len(non_public_new),
                     "evidence": {
-                        "new_listener_endpoints": new_endpoints,
+                        "new_non_public_listener_endpoints": non_public_new,
                         "posture_changed": posture_changed,
                         "attention_score_delta": score_delta,
                     },
@@ -232,7 +270,7 @@ async def security_snapshot() -> dict:
                     ),
                 }
             )
-        elif removed_endpoints:
+        elif removed_endpoints and not missing_expected_public:
             findings.append(
                 {
                     "id": "listener-reduction",
@@ -263,6 +301,7 @@ async def security_snapshot() -> dict:
         "severity_counts": severity_counts,
         "findings": findings,
         "evidence": evidence,
+        "expected_listener_policy": expected_listener_policy,
         "baseline_comparison": baseline_comparison,
         "baseline_context": {
             "process_churn_is_context_only": True,
@@ -274,6 +313,7 @@ async def security_snapshot() -> dict:
             "Local host observation only.",
             "No external network scanning was performed.",
             "No vulnerability database lookup was performed.",
+            "The expected listener baseline is learned from first observation and is not yet an administrator-approved allowlist.",
             "Process churn alone is retained as context and does not raise a change finding.",
             "Unresolved listener ownership is a visibility limitation, not proof of suspicious activity.",
             "Changes from baseline are observations and do not prove compromise.",
