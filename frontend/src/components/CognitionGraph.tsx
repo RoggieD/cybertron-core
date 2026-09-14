@@ -23,6 +23,11 @@ export type CognitionProvenance = {
   tools: string[];
 };
 
+const EMPTY_PROVENANCE: CognitionProvenance = {
+  memorySources: [],
+  tools: [],
+};
+
 const BASE_NODES: GraphNode[] = [
   { id: "user", label: "USER", position: [-5.1, 0, 0] },
   { id: "router", label: "ROUTER", position: [-3.1, 0, 0.15] },
@@ -41,6 +46,21 @@ const BASE_EDGES: GraphEdge[] = [
   { from: "tool", to: "model" },
   { from: "model", to: "user" },
 ];
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && !!item.trim());
+}
+
+function entityId(event: CoreEvent, type: string): string | null {
+  if (event.target?.type === type && typeof event.target.id === "string") {
+    return event.target.id;
+  }
+  if (event.actor?.type === type && typeof event.actor.id === "string") {
+    return event.actor.id;
+  }
+  return null;
+}
 
 function normalizeLabel(value: string): string {
   const trimmed = value.trim();
@@ -119,7 +139,11 @@ function currentAccent() {
       };
 }
 
-function createLabel(text: string, provenance: boolean, palette: ReturnType<typeof currentAccent>) {
+function createLabel(
+  text: string,
+  provenance: boolean,
+  palette: ReturnType<typeof currentAccent>,
+) {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 96;
@@ -158,7 +182,7 @@ export default function CognitionGraph({
 }: {
   event: CoreEvent | null;
   connected: boolean;
-  provenance: CognitionProvenance;
+  provenance?: CognitionProvenance;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const activeNodeRef = useRef<NodeId | null>(null);
@@ -166,22 +190,37 @@ export default function CognitionGraph({
   const transitionStartedRef = useRef(0);
   const [activeNode, setActiveNode] = useState<NodeId | null>(null);
   const [lastEvent, setLastEvent] = useState("WAITING");
-
-  const graph = useMemo(
-    () => buildGraph(provenance),
-    [provenance.memorySources, provenance.tools],
-  );
-
-  const graphSignature = useMemo(
-    () => graph.nodes.map((node) => node.id).join("|"),
-    [graph],
-  );
+  const [observedProvenance, setObservedProvenance] = useState<CognitionProvenance>(EMPTY_PROVENANCE);
 
   useEffect(() => {
     if (!event) return;
 
     const nextNode = eventNode(event.event_type);
     setLastEvent(event.event_type);
+
+    if (event.event_type === "prompt.received") {
+      setObservedProvenance(EMPTY_PROVENANCE);
+    }
+
+    if (event.event_type === "memory.search_completed") {
+      const sources = stringList(event.metadata?.sources);
+      if (sources.length) {
+        setObservedProvenance((current) => ({
+          ...current,
+          memorySources: Array.from(new Set([...current.memorySources, ...sources])),
+        }));
+      }
+    }
+
+    if (event.event_type.startsWith("tool.")) {
+      const tool = entityId(event, "tool");
+      if (tool) {
+        setObservedProvenance((current) => ({
+          ...current,
+          tools: current.tools.includes(tool) ? current.tools : [...current.tools, tool],
+        }));
+      }
+    }
 
     if (nextNode) {
       previousNodeRef.current = activeNodeRef.current;
@@ -190,6 +229,18 @@ export default function CognitionGraph({
       setActiveNode(nextNode);
     }
   }, [event]);
+
+  const effectiveProvenance = provenance ?? observedProvenance;
+
+  const graph = useMemo(
+    () => buildGraph(effectiveProvenance),
+    [effectiveProvenance.memorySources, effectiveProvenance.tools],
+  );
+
+  const graphSignature = useMemo(
+    () => graph.nodes.map((node) => node.id).join("|"),
+    [graph],
+  );
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -264,7 +315,7 @@ export default function CognitionGraph({
     for (const node of graph.nodes) {
       const material = new THREE.MeshStandardMaterial({
         color: node.provenance ? palette.edge : palette.idle,
-        emissive: node.provenance ? palette.idleEmissive : palette.idleEmissive,
+        emissive: palette.idleEmissive,
         emissiveIntensity: node.provenance ? 1.9 : 1.4,
         roughness: 0.2,
         metalness: 0.72,
@@ -465,7 +516,8 @@ export default function CognitionGraph({
     };
   }, [graphSignature]);
 
-  const provenanceCount = provenance.memorySources.length + provenance.tools.length;
+  const provenanceCount =
+    effectiveProvenance.memorySources.length + effectiveProvenance.tools.length;
 
   return (
     <section className="cognition-graph-panel">
