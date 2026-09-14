@@ -21,6 +21,9 @@ export type StatusOverview = {
       memory_total_mb?: number | null;
       memory_usage_percent?: number | null;
       temperature_c?: number | null;
+      power_draw_watts?: number | null;
+      power_limit_watts?: number | null;
+      power_usage_percent?: number | null;
     };
     uptime_seconds: number;
   };
@@ -108,6 +111,8 @@ export type TelemetryHistorySample = {
   memory_percent: number;
   disk_percent: number;
   gpu_percent?: number | null;
+  gpu_memory_percent?: number | null;
+  gpu_power_watts?: number | null;
   docker_running: number;
   docker_total: number;
   services_reachable: number;
