@@ -971,3 +971,40 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+.service-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.service-detail-actions button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.service-last-check {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.service-last-check span {
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+}
+
+.service-last-check strong {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+@media (max-width: 560px) {
+  .service-detail-actions {
+    flex-direction: column;
+  }
+}

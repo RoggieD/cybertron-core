@@ -98,6 +98,9 @@ export default function App() {
   const [services, setServices] = useState<ServiceHealthItem[]>([]);
   const [selectedService, setSelectedService] =
     useState<ServiceHealthItem | null>(null);
+  const [manualCheckBusy, setManualCheckBusy] = useState(false);
+  const [lastManualCheck, setLastManualCheck] =
+    useState<Date | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -230,6 +233,34 @@ export default function App() {
       socket.close();
     };
   }, []);
+
+  async function checkSelectedService() {
+    if (!selectedService || manualCheckBusy) {
+      return;
+    }
+
+    setManualCheckBusy(true);
+
+    try {
+      const serviceData = await getServiceStatus();
+
+      setServices(serviceData.services);
+
+      const refreshed =
+        serviceData.services.find(
+          (service) =>
+            service.name === selectedService.name
+        ) ?? selectedService;
+
+      setSelectedService(refreshed);
+      setLastManualCheck(new Date());
+      setOverviewError(false);
+    } catch {
+      setOverviewError(true);
+    } finally {
+      setManualCheckBusy(false);
+    }
+  }
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -571,12 +602,22 @@ export default function App() {
                 <strong>{selectedService.name}</strong>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedService(null)}
-              >
-                CLOSE
-              </button>
+              <div className="service-detail-actions">
+                <button
+                  type="button"
+                  onClick={() => void checkSelectedService()}
+                  disabled={manualCheckBusy}
+                >
+                  {manualCheckBusy ? "CHECKING..." : "CHECK NOW"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedService(null)}
+                >
+                  CLOSE
+                </button>
+              </div>
             </div>
 
             <div className="service-detail-grid">
@@ -624,6 +665,15 @@ export default function App() {
               <code>
                 {selectedService.target ?? "Not reported"}
               </code>
+            </div>
+
+            <div className="service-last-check">
+              <span>LAST MANUAL CHECK</span>
+              <strong>
+                {lastManualCheck
+                  ? lastManualCheck.toLocaleTimeString()
+                  : "NOT RUN"}
+              </strong>
             </div>
 
             {selectedService.error && (
