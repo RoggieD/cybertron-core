@@ -60,6 +60,19 @@ def select_tool(
         if any(
             phrase in normalized
             for phrase in (
+                "incident",
+                "incidents",
+                "what keeps failing",
+                "failures",
+                "overnight",
+                "usually last",
+            )
+        ):
+            return "incident.summary", {}
+
+        if any(
+            phrase in normalized
+            for phrase in (
                 "service status",
                 "services are up",
                 "services up",

@@ -220,6 +220,9 @@ def render_verified_tool_result(
     if tool_id == "system.overview":
         return render_system_overview(result)
 
+    if tool_id == "incident.summary":
+        return render_incident_summary(result)
+
     return None
 
 
@@ -322,6 +325,9 @@ def should_return_verified_only(
         return True
 
     if tool_id == "system.overview":
+        return True
+
+    if tool_id == "incident.summary":
         return True
 
     return False
@@ -729,5 +735,55 @@ def render_system_overview(result: dict) -> str:
         "Network:",
         f"- Listening sockets: {network.get('listeners', 0)}",
     ]
+
+    return "\n".join(lines)
+
+
+def render_incident_summary(result: dict) -> str:
+    analytics = result.get("analytics") or {}
+    recent = result.get("recent") or []
+
+    lines = [
+        "INCIDENT INTELLIGENCE — VERIFIED",
+        "",
+        f"Total events: {analytics.get('total_events', 0)}",
+        f"Opened: {analytics.get('opened_events', 0)}",
+        f"Resolved: {analytics.get('resolved_events', 0)}",
+        (
+            "Average resolution: "
+            f"{analytics.get('average_resolution_seconds', 0)} sec"
+        ),
+        "",
+        "Top recurring incidents:",
+    ]
+
+    top = analytics.get("top_incidents") or []
+
+    if top:
+        for item in top:
+            lines.append(
+                f"- {item.get('incident_id')} | "
+                f"{item.get('occurrences', 0)} occurrence(s)"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend(
+        [
+            "",
+            "Recent events:",
+        ]
+    )
+
+    if recent:
+        for item in recent[-10:]:
+            lines.append(
+                f"- {str(item.get('state', '?')).upper()} | "
+                f"{str(item.get('severity', '?')).upper()} | "
+                f"{item.get('id')} | "
+                f"{item.get('message', '')}"
+            )
+    else:
+        lines.append("- none")
 
     return "\n".join(lines)

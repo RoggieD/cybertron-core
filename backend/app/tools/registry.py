@@ -1,3 +1,4 @@
+from backend.app.tools.incidents import incident_summary
 from backend.app.tools.overview import system_overview
 from backend.app.tools.services import service_status
 from backend.app.tools.reachability import network_reachability
@@ -38,6 +39,17 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=port_owner,
+    ),
+    "incident.summary": ToolDefinition(
+        id="incident.summary",
+        name="Incident Summary",
+        description=(
+            "Read-only summary of persisted incident history "
+            "and operational incident analytics."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=incident_summary,
     ),
     "system.overview": ToolDefinition(
         id="system.overview",
