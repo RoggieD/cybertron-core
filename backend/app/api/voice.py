@@ -1,4 +1,5 @@
 import asyncio
+import re
 import subprocess
 
 import httpx
@@ -55,6 +56,124 @@ def _whisper_headers() -> dict[str, str]:
     if settings.whisper_api_key:
         headers["Authorization"] = f"Bearer {settings.whisper_api_key}"
     return headers
+
+
+def _extract_number(text: str, label: str) -> float | None:
+    match = re.search(
+        rf"\b{re.escape(label)}\s*:\s*([0-9]+(?:\.[0-9]+)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _extract_integer(text: str, label: str) -> int | None:
+    value = _extract_number(text, label)
+    return int(value) if value is not None else None
+
+
+def _system_overview_spoken_summary(text: str) -> str | None:
+    upper = text.upper()
+    if "SYSTEM OVERVIEW" not in upper and "SYSTEM STATUS" not in upper:
+        return None
+
+    host_match = re.search(r"\bHost(?:name)?\s*:\s*([^\s]+)", text, re.IGNORECASE)
+    host = host_match.group(1) if host_match else "the host"
+
+    cpu = _extract_number(text, "CPU usage")
+    memory = _extract_number(text, "Memory usage")
+    disk = _extract_number(text, "Disk usage")
+    containers = _extract_integer(text, "Containers")
+    running = _extract_integer(text, "Running")
+    unreachable = _extract_integer(text, "Unreachable")
+
+    healthy_match = re.search(
+        r"\bHealthy\s*:\s*(\d+)\s*/\s*(\d+)",
+        text,
+        re.IGNORECASE,
+    )
+    healthy = int(healthy_match.group(1)) if healthy_match else None
+    service_total = int(healthy_match.group(2)) if healthy_match else None
+
+    resource_warning = False
+    resource_elevated = False
+
+    if cpu is not None and cpu >= 90:
+        resource_warning = True
+    elif cpu is not None and cpu >= 75:
+        resource_elevated = True
+
+    if memory is not None and memory >= 90:
+        resource_warning = True
+    elif memory is not None and memory >= 80:
+        resource_elevated = True
+
+    if disk is not None and disk >= 95:
+        resource_warning = True
+    elif disk is not None and disk >= 85:
+        resource_elevated = True
+
+    service_warning = unreachable is not None and unreachable > 0
+
+    if resource_warning:
+        opening = f"{host} needs attention."
+    elif resource_elevated or service_warning:
+        opening = f"{host} is healthy overall, with one item needing attention."
+    else:
+        opening = f"{host} is healthy overall."
+
+    resource_parts: list[str] = []
+    if cpu is not None:
+        resource_parts.append(f"CPU is {cpu:g} percent")
+    if memory is not None:
+        resource_parts.append(f"memory is {memory:g} percent")
+    if disk is not None:
+        resource_parts.append(f"disk usage is {disk:g} percent")
+
+    sentences = [opening]
+
+    if resource_parts:
+        if not resource_warning and not resource_elevated:
+            sentences.append(
+                "System resource usage is comfortable: " + ", ".join(resource_parts) + "."
+            )
+        else:
+            sentences.append("Current resource usage: " + ", ".join(resource_parts) + ".")
+
+    if containers is not None and running is not None:
+        sentences.append(f"{running} of {containers} containers are running.")
+
+    if healthy is not None and service_total is not None:
+        if unreachable:
+            noun = "service is" if unreachable == 1 else "services are"
+            sentences.append(
+                f"{healthy} of {service_total} monitored services are healthy, and "
+                f"{unreachable} {noun} unreachable."
+            )
+        else:
+            sentences.append(f"All {service_total} monitored services are healthy.")
+
+    if service_warning:
+        sentences.append("The unreachable service is the only monitored issue needing attention.")
+    elif resource_elevated:
+        sentences.append("Resource usage is elevated but has not reached the warning threshold.")
+    elif resource_warning:
+        sentences.append("At least one resource has reached a warning threshold.")
+
+    return " ".join(sentences)
+
+
+def _prepare_spoken_text(text: str) -> str:
+    """Create deterministic speech for known verified tool outputs."""
+    system_summary = _system_overview_spoken_summary(text)
+    if system_summary:
+        return system_summary
+    return text
 
 
 @router.get("/status")
@@ -157,7 +276,7 @@ async def synthesize_speech(request: SpeechRequest) -> Response:
     base_url, _ = await _kokoro_base_url()
     payload = {
         "model": settings.kokoro_model,
-        "input": request.text,
+        "input": _prepare_spoken_text(request.text),
         "voice": request.voice or settings.kokoro_voice,
         "response_format": "mp3",
     }
