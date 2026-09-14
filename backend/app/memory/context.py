@@ -40,14 +40,10 @@ def _publish_memory_event(
     *,
     status: str,
     metadata: dict | None = None,
+    session_id: str | None = None,
+    trace_id: str | None = None,
 ) -> None:
-    """Publish memory lifecycle telemetry without blocking retrieval.
-
-    Context retrieval is intentionally synchronous today because it reads the
-    local SQLite memory store. Chat requests execute inside an asyncio event
-    loop, so scheduling the event keeps the retrieval API backward compatible
-    while still exposing honest memory activity to the C.O.R.E. event bus.
-    """
+    """Publish memory lifecycle telemetry without blocking retrieval."""
 
     try:
         loop = asyncio.get_running_loop()
@@ -58,6 +54,8 @@ def _publish_memory_event(
         event_bus.publish(
             CoreEvent(
                 event_type=event_type,
+                session_id=session_id,
+                trace_id=trace_id,
                 actor={
                     "type": "agent",
                     "id": "conversation-context",
@@ -77,6 +75,8 @@ def retrieve_memory_context(
     message: str,
     *,
     limit: int = 5,
+    session_id: str | None = None,
+    trace_id: str | None = None,
 ) -> list[dict]:
     query_tokens = _tokens(message)
 
@@ -86,6 +86,8 @@ def retrieve_memory_context(
     _publish_memory_event(
         "memory.search_started",
         status="running",
+        session_id=session_id,
+        trace_id=trace_id,
         metadata={
             "namespace": "core",
             "scope": "shared,system",
@@ -224,6 +226,8 @@ def retrieve_memory_context(
     _publish_memory_event(
         "memory.search_completed",
         status="complete",
+        session_id=session_id,
+        trace_id=trace_id,
         metadata={
             "namespace": "core",
             "scope": ",".join(result_scopes) if result_scopes else "none",
@@ -240,9 +244,14 @@ def retrieve_memory_context(
 
 def format_memory_context(
     message: str,
+    *,
+    session_id: str | None = None,
+    trace_id: str | None = None,
 ) -> str:
     memories = retrieve_memory_context(
-        message
+        message,
+        session_id=session_id,
+        trace_id=trace_id,
     )
 
     if not memories:
