@@ -54,6 +54,21 @@ def select_tool(
         service = resolve_service(message)
 
         if service is not None:
+            if service.get("scope") == "docker":
+                return "network.reachability", {
+                    "container": service["container"],
+                    "port": service["port"],
+                    "protocol": service.get(
+                        "protocol",
+                        "http",
+                    ),
+                    "path": service.get(
+                        "health_path",
+                        "/",
+                    ),
+                    "service_name": service["name"],
+                }
+
             return "network.reachability", {
                 "target": service["target"],
                 "service_name": service["name"],
