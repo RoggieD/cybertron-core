@@ -1,14 +1,16 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { getHealth } from "../api/core";
 import { getStatusOverview, type StatusOverview } from "../api/status";
 import { streamChat, type StreamEvent } from "../api/chat";
+import { getVoiceStatus, synthesizeSpeech } from "../api/voice";
 import {
   connectCoreWebSocket,
   type CoreEvent,
 } from "../api/websocket";
 
 import "../styles.css";
+import "../voice.css";
 
 type ReactorState =
   | "IDLE"
@@ -19,6 +21,7 @@ type ReactorState =
   | "COMPLETE"
   | "ERROR";
 
+type VoiceState = "READY" | "LISTENING" | "SPEAKING" | "OFFLINE" | "ERROR";
 type TelemetryState = "HEALTHY" | "ELEVATED" | "WARNING";
 
 function getTelemetryState(
@@ -46,6 +49,21 @@ function getTelemetryState(
   return "HEALTHY";
 }
 
+function speechRecognitionConstructor(): any | null {
+  const browserWindow = window as any;
+  return browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition ?? null;
+}
+
+function cleanSpeechText(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " Code block omitted. ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[(.*?)\]\([^)]*\)/g, "$1")
+    .replace(/[*#>_~-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function DashboardPage() {
   const [apiStatus, setApiStatus] = useState("CHECKING");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -64,6 +82,32 @@ export default function DashboardPage() {
   const [durationMs, setDurationMs] = useState<number | null>(null);
   const [traceId, setTraceId] = useState<string | null>(null);
   const [traceEventCount, setTraceEventCount] = useState(0);
+
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceState, setVoiceState] = useState<VoiceState>("OFFLINE");
+  const [voiceProvider, setVoiceProvider] = useState("KOKORO");
+  const [micSupported, setMicSupported] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recognitionRef = useRef<any | null>(null);
+
+  useEffect(() => {
+    setMicSupported(Boolean(speechRecognitionConstructor()));
+
+    void getVoiceStatus()
+      .then((status) => {
+        setVoiceProvider(status.provider.toUpperCase());
+        setVoiceState(status.reachable ? "READY" : "OFFLINE");
+      })
+      .catch(() => setVoiceState("OFFLINE"));
+
+    return () => {
+      recognitionRef.current?.abort?.();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -150,11 +194,43 @@ export default function DashboardPage() {
     return () => socket.close();
   }, []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const message = prompt.trim();
-    if (!message) return;
+  async function speak(text: string) {
+    const speechText = cleanSpeechText(text);
+    if (!voiceEnabled || !speechText || voiceState === "OFFLINE") return;
 
+    try {
+      setVoiceState("SPEAKING");
+      const blob = await synthesizeSpeech(speechText);
+      const url = URL.createObjectURL(blob);
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+        setVoiceState("READY");
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+        setVoiceState("ERROR");
+      };
+      await audio.play();
+    } catch {
+      setVoiceState("ERROR");
+    }
+  }
+
+  async function processMessage(message: string) {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+
+    setPrompt(trimmed);
     setResponseText("");
     setEvalCount(null);
     setDurationMs(null);
@@ -164,8 +240,10 @@ export default function DashboardPage() {
     setActiveTool("NONE");
     setReactorState("ROUTING");
 
+    let finalResponse = "";
+
     try {
-      await streamChat(message, (streamEvent: StreamEvent) => {
+      await streamChat(trimmed, (streamEvent: StreamEvent) => {
         if (streamEvent.model) setActiveModel(streamEvent.model);
 
         const eventWithAgent = streamEvent as StreamEvent & {
@@ -177,6 +255,7 @@ export default function DashboardPage() {
         else if (eventWithAgent.agent) setActiveAgent(eventWithAgent.agent);
 
         if (streamEvent.event === "tool.result" && streamEvent.content) {
+          finalResponse = streamEvent.content;
           setResponseText(streamEvent.content);
           setActiveModel("NOT USED");
           setEvalCount(null);
@@ -184,6 +263,7 @@ export default function DashboardPage() {
         }
 
         if (streamEvent.event === "model.token" && streamEvent.content) {
+          finalResponse += streamEvent.content;
           setResponseText((current) => current + streamEvent.content);
         }
 
@@ -198,9 +278,12 @@ export default function DashboardPage() {
 
         if (streamEvent.event === "model.error") {
           setReactorState("ERROR");
-          setResponseText(streamEvent.error ?? "Unknown model streaming error.");
+          finalResponse = streamEvent.error ?? "Unknown model streaming error.";
+          setResponseText(finalResponse);
         }
       });
+
+      if (finalResponse) await speak(finalResponse);
     } catch (error) {
       setReactorState("ERROR");
       setResponseText(
@@ -209,12 +292,59 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await processMessage(prompt);
+  }
+
+  function toggleVoice() {
+    if (voiceEnabled && audioRef.current) {
+      audioRef.current.pause();
+      URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
+      setVoiceState("READY");
+    }
+    setVoiceEnabled((enabled) => !enabled);
+  }
+
+  function startListening() {
+    const Recognition = speechRecognitionConstructor();
+    if (!Recognition) {
+      setVoiceState("ERROR");
+      return;
+    }
+
+    recognitionRef.current?.abort?.();
+    const recognition = new Recognition();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setVoiceState("LISTENING");
+    recognition.onerror = () => setVoiceState("ERROR");
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setVoiceState((state) => state === "LISTENING" ? "READY" : state);
+    };
+    recognition.onresult = (event: any) => {
+      const transcript = String(event.results?.[0]?.[0]?.transcript ?? "").trim();
+      if (transcript) {
+        setPrompt(transcript);
+        void processMessage(transcript);
+      }
+    };
+
+    recognition.start();
+  }
+
   const telemetryState = getTelemetryState(overview, overviewError);
   const busy =
     reactorState === "ROUTING" ||
     reactorState === "AGENT_ACTIVE" ||
     reactorState === "TOOL_ACTIVE" ||
     reactorState === "THINKING";
+  const displayedReactorState = voiceState === "SPEAKING" ? "SPEAKING" : reactorState;
 
   return (
     <main className="core-shell">
@@ -227,7 +357,7 @@ export default function DashboardPage() {
       </section>
 
       <section
-        className={`reactor-panel reactor-${reactorState.toLowerCase()} telemetry-${telemetryState.toLowerCase()}`}
+        className={`reactor-panel reactor-${displayedReactorState.toLowerCase()} telemetry-${telemetryState.toLowerCase()}`}
       >
         <div className="reactor">
           <div className="reactor-core" />
@@ -237,8 +367,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="state-label">
-          {reactorState}
-          {reactorState === "IDLE" && (
+          {displayedReactorState}
+          {displayedReactorState === "IDLE" && (
             <span className={`reactor-health telemetry-${telemetryState.toLowerCase()}`}>
               {" "}• {telemetryState}
             </span>
@@ -260,6 +390,28 @@ export default function DashboardPage() {
           </button>
         </form>
 
+        <div className="voice-controls">
+          <button
+            type="button"
+            className={`voice-button ${voiceState === "LISTENING" ? "listening" : ""}`}
+            onClick={startListening}
+            disabled={busy || !micSupported}
+            title={micSupported ? "Speak a command" : "Speech recognition is not supported by this browser"}
+          >
+            {voiceState === "LISTENING" ? "● LISTENING" : "🎙 LISTEN"}
+          </button>
+          <button
+            type="button"
+            className={`voice-button ${voiceEnabled ? "active" : ""}`}
+            onClick={toggleVoice}
+          >
+            {voiceEnabled ? "🔊 VOICE ON" : "🔇 VOICE OFF"}
+          </button>
+          <div className={`voice-state ${voiceState.toLowerCase()}`}>
+            {voiceProvider} • {voiceState}{!micSupported ? " • MIC STT UNSUPPORTED" : ""}
+          </div>
+        </div>
+
         <div className="response-panel">
           {responseText ? (
             <p>{responseText}</p>
@@ -280,6 +432,12 @@ export default function DashboardPage() {
           <span>EVENT BUS</span>
           <strong className={socketConnected ? "online" : ""}>
             {socketConnected ? "CONNECTED" : "OFFLINE"}
+          </strong>
+        </article>
+        <article>
+          <span>VOICE ENGINE</span>
+          <strong className={voiceState === "READY" || voiceState === "SPEAKING" ? "online" : ""}>
+            {voiceState}
           </strong>
         </article>
         <article>
