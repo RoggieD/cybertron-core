@@ -19,6 +19,7 @@ type TelemetrySample = {
   cpu: number;
   memory: number;
   disk: number;
+  gpu: number | null;
   serviceLatency: number;
 };
 
@@ -107,6 +108,7 @@ export default function SystemsPage() {
               cpu: sample.cpu_percent,
               memory: sample.memory_percent,
               disk: sample.disk_percent,
+              gpu: typeof sample.gpu_percent === "number" ? sample.gpu_percent : null,
               serviceLatency: sample.service_latency_ms,
             }))
             .filter((sample) => sample.timestamp >= cutoff),
@@ -165,6 +167,9 @@ export default function SystemsPage() {
               cpu: data.system.cpu.usage_percent,
               memory: data.system.memory.usage_percent,
               disk: data.system.disk.usage_percent,
+              gpu: data.system.gpu?.available && typeof data.system.gpu.usage_percent === "number"
+                ? data.system.gpu.usage_percent
+                : null,
               serviceLatency: averageLatency,
             },
           ].filter((sample) => sample.timestamp >= cutoff);
@@ -202,6 +207,11 @@ export default function SystemsPage() {
     : missing.length || !securityPolicy?.approved_configured
       ? "warning"
       : "approved";
+
+  const gpuValues = telemetryHistory
+    .map((sample) => sample.gpu)
+    .filter((value): value is number => typeof value === "number");
+  const currentGpu = overview?.system.gpu;
 
   return (
     <main className="core-shell">
@@ -328,10 +338,16 @@ export default function SystemsPage() {
           <small>{telemetryHistory.length} SAMPLES</small>
         </div>
 
-        <div className="trend-grid">
+        <div className="trend-grid trend-grid-five">
           <article className="trend-card">
             <div><span>CPU</span><strong>{overview ? `${overview.system.cpu.usage_percent}%` : "--"}</strong></div>
             <Sparkline values={telemetryHistory.map((sample) => sample.cpu)} />
+          </article>
+
+          <article className="trend-card">
+            <div><span>GPU</span><strong>{currentGpu?.available && typeof currentGpu.usage_percent === "number" ? `${currentGpu.usage_percent}%` : "N/A"}</strong></div>
+            <Sparkline values={gpuValues} />
+            <small>{currentGpu?.available ? `${currentGpu.name ?? "NVIDIA GPU"} • ${currentGpu.temperature_c ?? "--"}°C` : "GPU TELEMETRY UNAVAILABLE"}</small>
           </article>
 
           <article className="trend-card">
