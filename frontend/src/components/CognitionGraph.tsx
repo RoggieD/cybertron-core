@@ -4,18 +4,27 @@ import * as THREE from "three";
 import type { CoreEvent } from "../api/websocket";
 
 type NodeId = string;
+type SourceKind =
+  | "policy"
+  | "memory"
+  | "historical"
+  | "telemetry"
+  | "external"
+  | "generic";
 
 type GraphNode = {
   id: NodeId;
   label: string;
   position: [number, number, number];
   provenance?: boolean;
+  sourceKind?: SourceKind;
 };
 
 type GraphEdge = {
   from: NodeId;
   to: NodeId;
   provenance?: boolean;
+  sourceKind?: SourceKind;
 };
 
 export type CognitionProvenance = {
@@ -47,9 +56,28 @@ const BASE_EDGES: GraphEdge[] = [
   { from: "model", to: "user" },
 ];
 
+const SOURCE_COLORS: Record<SourceKind, number> = {
+  policy: 0xc77dff,
+  memory: 0xffd166,
+  historical: 0xff7b00,
+  telemetry: 0x00e5ff,
+  external: 0xff4fd8,
+  generic: 0xa8ff9e,
+};
+
+const BASE_NODE_COLORS: Record<string, number> = {
+  user: 0x67e8ff,
+  router: 0xa970ff,
+  agent: 0xffd166,
+  memory: 0xffa62b,
+  tool: 0x2de2e6,
+};
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && !!item.trim());
+  return value.filter(
+    (item): item is string => typeof item === "string" && !!item.trim(),
+  );
 }
 
 function entityId(event: CoreEvent, type: string): string | null {
@@ -65,7 +93,57 @@ function entityId(event: CoreEvent, type: string): string | null {
 function normalizeLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "UNKNOWN";
-  return trimmed.length > 18 ? `${trimmed.slice(0, 16)}…` : trimmed;
+  return trimmed.length > 22 ? `${trimmed.slice(0, 20)}…` : trimmed;
+}
+
+function classifySource(value: string, branch: "memory" | "tool"): SourceKind {
+  const normalized = value.toLowerCase();
+
+  if (normalized.includes("policy") || normalized.includes("auth")) {
+    return "policy";
+  }
+  if (
+    normalized.includes("incident") ||
+    normalized.includes("history") ||
+    normalized.includes("audit")
+  ) {
+    return "historical";
+  }
+  if (normalized.includes("memory") || normalized.includes("sqlite")) {
+    return "memory";
+  }
+  if (
+    normalized.includes("network") ||
+    normalized.includes("docker") ||
+    normalized.includes("system") ||
+    normalized.includes("service") ||
+    normalized.includes("process") ||
+    normalized.includes("listener") ||
+    normalized.includes("status")
+  ) {
+    return "telemetry";
+  }
+  if (
+    normalized.includes("web") ||
+    normalized.includes("github") ||
+    normalized.includes("api") ||
+    normalized.includes("intel") ||
+    normalized.includes("external")
+  ) {
+    return "external";
+  }
+
+  return branch === "tool" ? "telemetry" : "generic";
+}
+
+function spreadPosition(
+  index: number,
+  count: number,
+  y: number,
+  z: number,
+): [number, number, number] {
+  const offset = index - (count - 1) / 2;
+  return [1.6 + offset * 1.65, y + (index % 2 ? 0.18 : -0.06), z];
 }
 
 function buildGraph(provenance: CognitionProvenance): {
@@ -80,26 +158,38 @@ function buildGraph(provenance: CognitionProvenance): {
 
   memorySources.forEach((source, index) => {
     const id = `memory-source:${source}`;
-    const offset = index - (memorySources.length - 1) / 2;
+    const sourceKind = classifySource(source, "memory");
     nodes.push({
       id,
       label: normalizeLabel(source).toUpperCase(),
-      position: [2.7 + Math.abs(offset) * 0.15, 2.85 + offset * 0.65, -0.45],
+      position: spreadPosition(index, memorySources.length, 3.35, -0.45),
       provenance: true,
+      sourceKind,
     });
-    edges.push({ from: id, to: "memory", provenance: true });
+    edges.push({
+      from: id,
+      to: "memory",
+      provenance: true,
+      sourceKind,
+    });
   });
 
   tools.forEach((tool, index) => {
     const id = `tool-source:${tool}`;
-    const offset = index - (tools.length - 1) / 2;
+    const sourceKind = classifySource(tool, "tool");
     nodes.push({
       id,
       label: normalizeLabel(tool).toUpperCase(),
-      position: [2.7 + Math.abs(offset) * 0.15, -2.85 + offset * 0.65, 0.45],
+      position: spreadPosition(index, tools.length, -3.35, 0.45),
       provenance: true,
+      sourceKind,
     });
-    edges.push({ from: id, to: "tool", provenance: true });
+    edges.push({
+      from: id,
+      to: "tool",
+      provenance: true,
+      sourceKind,
+    });
   });
 
   return { nodes, edges };
@@ -112,7 +202,9 @@ function eventNode(eventType: string): NodeId | null {
   if (eventType.startsWith("memory.")) return "memory";
   if (eventType.startsWith("tool.")) return "tool";
   if (eventType.startsWith("model.")) return "model";
-  if (eventType === "response.generated") return "user";
+  // Keep the evidence topology visually dominant after completion instead of
+  // turning USER into the giant active node again.
+  if (eventType === "response.generated") return null;
   return null;
 }
 
@@ -139,25 +231,53 @@ function currentAccent() {
       };
 }
 
+function hexCss(value: number): string {
+  return `#${value.toString(16).padStart(6, "0")}`;
+}
+
+function colorForNode(
+  node: GraphNode,
+  palette: ReturnType<typeof currentAccent>,
+): number {
+  if (node.provenance && node.sourceKind) {
+    return SOURCE_COLORS[node.sourceKind];
+  }
+  if (node.id === "model") return palette.accent;
+  return BASE_NODE_COLORS[node.id] ?? palette.idle;
+}
+
+function edgeColor(
+  edge: GraphEdge,
+  palette: ReturnType<typeof currentAccent>,
+): number {
+  if (edge.provenance && edge.sourceKind) {
+    return SOURCE_COLORS[edge.sourceKind];
+  }
+  const destination = BASE_NODE_COLORS[edge.to];
+  if (edge.to === "model") return palette.accent;
+  return destination ?? palette.edge;
+}
+
 function createLabel(
   text: string,
   provenance: boolean,
-  palette: ReturnType<typeof currentAccent>,
+  color: number,
 ) {
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 96;
+  canvas.width = provenance ? 640 : 512;
+  canvas.height = 112;
 
   const context = canvas.getContext("2d");
   if (!context) return null;
 
+  const cssColor = hexCss(color);
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.font = provenance ? "500 24px monospace" : "600 34px monospace";
+  context.font = provenance ? "600 27px monospace" : "600 34px monospace";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.shadowColor = palette.shadow;
-  context.shadowBlur = provenance ? 7 : 12;
-  context.fillStyle = palette.text;
+  context.shadowColor = cssColor;
+  context.shadowBlur = provenance ? 10 : 14;
+  context.fillStyle = provenance ? "#f7fff5" : cssColor;
   context.fillText(text, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -170,7 +290,7 @@ function createLabel(
   });
 
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(provenance ? 2.55 : 2.3, provenance ? 0.48 : 0.58, 1);
+  sprite.scale.set(provenance ? 3.1 : 2.3, provenance ? 0.54 : 0.58, 1);
 
   return { sprite, material, texture };
 }
@@ -190,7 +310,8 @@ export default function CognitionGraph({
   const transitionStartedRef = useRef(0);
   const [activeNode, setActiveNode] = useState<NodeId | null>(null);
   const [lastEvent, setLastEvent] = useState("WAITING");
-  const [observedProvenance, setObservedProvenance] = useState<CognitionProvenance>(EMPTY_PROVENANCE);
+  const [observedProvenance, setObservedProvenance] =
+    useState<CognitionProvenance>(EMPTY_PROVENANCE);
 
   useEffect(() => {
     if (!event) return;
@@ -207,7 +328,9 @@ export default function CognitionGraph({
       if (sources.length) {
         setObservedProvenance((current) => ({
           ...current,
-          memorySources: Array.from(new Set([...current.memorySources, ...sources])),
+          memorySources: Array.from(
+            new Set([...current.memorySources, ...sources]),
+          ),
         }));
       }
     }
@@ -217,7 +340,9 @@ export default function CognitionGraph({
       if (tool) {
         setObservedProvenance((current) => ({
           ...current,
-          tools: current.tools.includes(tool) ? current.tools : [...current.tools, tool],
+          tools: current.tools.includes(tool)
+            ? current.tools
+            : [...current.tools, tool],
         }));
       }
     }
@@ -248,7 +373,7 @@ export default function CognitionGraph({
 
     const palette = currentAccent();
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020507, 0.05);
+    scene.fog = new THREE.FogExp2(0x020507, 0.047);
 
     const camera = new THREE.PerspectiveCamera(
       43,
@@ -256,7 +381,7 @@ export default function CognitionGraph({
       0.1,
       100,
     );
-    camera.position.set(0, 0.1, 11.7);
+    camera.position.set(0, 0.05, 12.2);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -267,24 +392,32 @@ export default function CognitionGraph({
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.32;
     mount.replaceChildren(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(palette.accentSoft, 0.7));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.58));
 
-    const keyLight = new THREE.PointLight(palette.accent, 42, 30);
+    const keyLight = new THREE.PointLight(palette.accent, 36, 30);
     keyLight.position.set(0, 3.5, 7);
     scene.add(keyLight);
 
-    const rimLight = new THREE.PointLight(0x3a7cff, 22, 24);
-    rimLight.position.set(-5, -3, 4);
-    scene.add(rimLight);
+    const violetLight = new THREE.PointLight(0xa970ff, 15, 18);
+    violetLight.position.set(-3.2, 2.2, 4.5);
+    scene.add(violetLight);
+
+    const cyanLight = new THREE.PointLight(0x00e5ff, 13, 18);
+    cyanLight.position.set(2.2, -2.5, 4.2);
+    scene.add(cyanLight);
+
+    const amberLight = new THREE.PointLight(0xffa62b, 11, 16);
+    amberLight.position.set(1.8, 3.1, 3.5);
+    scene.add(amberLight);
 
     const starGeometry = new THREE.BufferGeometry();
-    const starPositions = new Float32Array(240 * 3);
+    const starPositions = new Float32Array(270 * 3);
     for (let i = 0; i < starPositions.length; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 24;
-      starPositions[i + 1] = (Math.random() - 0.5) * 14;
+      starPositions[i] = (Math.random() - 0.5) * 25;
+      starPositions[i + 1] = (Math.random() - 0.5) * 15;
       starPositions[i + 2] = -2 - Math.random() * 8;
     }
     starGeometry.setAttribute(
@@ -293,18 +426,18 @@ export default function CognitionGraph({
     );
     const starMaterial = new THREE.PointsMaterial({
       color: palette.accent,
-      size: 0.025,
+      size: 0.026,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.36,
       depthWrite: false,
     });
     const stars = new THREE.Points(starGeometry, starMaterial);
     scene.add(stars);
 
     const nodeGeometry = new THREE.IcosahedronGeometry(0.5, 3);
-    const sourceGeometry = new THREE.OctahedronGeometry(0.28, 2);
+    const sourceGeometry = new THREE.OctahedronGeometry(0.29, 2);
     const haloGeometry = new THREE.RingGeometry(0.68, 0.73, 64);
-    const sourceHaloGeometry = new THREE.RingGeometry(0.4, 0.43, 48);
+    const sourceHaloGeometry = new THREE.RingGeometry(0.4, 0.44, 48);
     const nodeObjects = new Map<NodeId, THREE.Mesh>();
     const haloObjects = new Map<NodeId, THREE.Mesh>();
     const labels: Array<{
@@ -313,22 +446,26 @@ export default function CognitionGraph({
     }> = [];
 
     for (const node of graph.nodes) {
+      const nodeColor = colorForNode(node, palette);
       const material = new THREE.MeshStandardMaterial({
-        color: node.provenance ? palette.edge : palette.idle,
-        emissive: palette.idleEmissive,
-        emissiveIntensity: node.provenance ? 1.9 : 1.4,
-        roughness: 0.2,
-        metalness: 0.72,
+        color: nodeColor,
+        emissive: nodeColor,
+        emissiveIntensity: node.provenance ? 1.7 : 1.1,
+        roughness: 0.18,
+        metalness: 0.74,
       });
-      const mesh = new THREE.Mesh(node.provenance ? sourceGeometry : nodeGeometry, material);
+      const mesh = new THREE.Mesh(
+        node.provenance ? sourceGeometry : nodeGeometry,
+        material,
+      );
       mesh.position.set(...node.position);
       scene.add(mesh);
       nodeObjects.set(node.id, mesh);
 
       const haloMaterial = new THREE.MeshBasicMaterial({
-        color: palette.accent,
+        color: nodeColor,
         transparent: true,
-        opacity: node.provenance ? 0.28 : 0.16,
+        opacity: node.provenance ? 0.38 : 0.2,
         side: THREE.DoubleSide,
         depthWrite: false,
       });
@@ -340,10 +477,10 @@ export default function CognitionGraph({
       scene.add(halo);
       haloObjects.set(node.id, halo);
 
-      const label = createLabel(node.label, !!node.provenance, palette);
+      const label = createLabel(node.label, !!node.provenance, nodeColor);
       if (label) {
         label.sprite.position.copy(mesh.position);
-        label.sprite.position.y -= node.provenance ? 0.57 : 0.9;
+        label.sprite.position.y -= node.provenance ? 0.63 : 0.9;
         scene.add(label.sprite);
         labels.push({ material: label.material, texture: label.texture });
       }
@@ -353,6 +490,7 @@ export default function CognitionGraph({
       edge: GraphEdge;
       line: THREE.Line;
       material: THREE.LineBasicMaterial;
+      baseColor: number;
     }> = [];
 
     for (const edge of graph.edges) {
@@ -364,26 +502,27 @@ export default function CognitionGraph({
         from.position.clone(),
         to.position.clone(),
       ]);
+      const baseColor = edgeColor(edge, palette);
       const material = new THREE.LineBasicMaterial({
-        color: palette.edge,
+        color: baseColor,
         transparent: true,
-        opacity: edge.provenance ? 0.72 : 0.48,
+        opacity: edge.provenance ? 0.8 : 0.52,
       });
       const line = new THREE.Line(geometry, material);
       scene.add(line);
-      edgeObjects.push({ edge, line, material });
+      edgeObjects.push({ edge, line, material, baseColor });
     }
 
     const packetGeometry = new THREE.SphereGeometry(0.11, 20, 20);
     const packetMaterial = new THREE.MeshBasicMaterial({
-      color: palette.accentSoft,
+      color: 0xffffff,
       transparent: true,
       opacity: 0,
     });
     const packet = new THREE.Mesh(packetGeometry, packetMaterial);
     scene.add(packet);
 
-    const packetLight = new THREE.PointLight(palette.accent, 10, 3.2);
+    const packetLight = new THREE.PointLight(palette.accent, 12, 3.4);
     packet.add(packetLight);
 
     let frame = 0;
@@ -405,52 +544,56 @@ export default function CognitionGraph({
         const material = mesh.material as THREE.MeshStandardMaterial;
         const haloMaterial = halo.material as THREE.MeshBasicMaterial;
         const isActive = node.id === current;
+        const nodeColor = colorForNode(node, palette);
 
         mesh.rotation.x = time * (0.16 + index * 0.015);
         mesh.rotation.y = time * (0.22 + index * 0.012);
 
         const idlePulse = 1 + Math.sin(time * 1.5 + index) * 0.025;
-        const sourcePulse = node.provenance ? 1.05 + Math.sin(time * 3 + index) * 0.06 : 1;
-        const activePulse = isActive ? 1.16 + Math.sin(time * 7) * 0.07 : 1;
+        const sourcePulse = node.provenance
+          ? 1.05 + Math.sin(time * 3 + index) * 0.06
+          : 1;
+        const activePulse = isActive
+          ? 1.16 + Math.sin(time * 7) * 0.07
+          : 1;
         mesh.scale.setScalar(idlePulse * sourcePulse * activePulse);
 
-        if (isActive) {
-          material.color.setHex(palette.accentSoft);
-          material.emissive.setHex(palette.accent);
-          material.emissiveIntensity = 4.2;
-        } else if (node.provenance) {
-          material.color.setHex(palette.edge);
-          material.emissive.setHex(palette.accent);
-          material.emissiveIntensity = 1.7 + Math.sin(time * 3 + index) * 0.35;
-        } else {
-          material.color.setHex(palette.idle);
-          material.emissive.setHex(palette.idleEmissive);
-          material.emissiveIntensity = 1.4;
-        }
+        material.color.setHex(isActive ? 0xffffff : nodeColor);
+        material.emissive.setHex(nodeColor);
+        material.emissiveIntensity = isActive
+          ? 4.8
+          : node.provenance
+            ? 2.0 + Math.sin(time * 3 + index) * 0.4
+            : 1.25;
 
+        haloMaterial.color.setHex(nodeColor);
         halo.scale.setScalar(
-          isActive ? 1.22 + Math.sin(time * 5) * 0.1 : node.provenance ? sourcePulse : 1,
+          isActive
+            ? 1.24 + Math.sin(time * 5) * 0.1
+            : node.provenance
+              ? sourcePulse
+              : 1,
         );
         haloMaterial.opacity = isActive
-          ? 0.72 + Math.sin(time * 6) * 0.2
+          ? 0.86 + Math.sin(time * 6) * 0.1
           : node.provenance
-            ? 0.34 + Math.sin(time * 3 + index) * 0.12
-            : 0.12;
+            ? 0.42 + Math.sin(time * 3 + index) * 0.13
+            : 0.18;
       }
 
-      for (const { edge, material } of edgeObjects) {
+      for (const { edge, material, baseColor } of edgeObjects) {
         const activePath =
           previous !== null &&
           current !== null &&
           ((edge.from === previous && edge.to === current) ||
             (edge.from === current && edge.to === previous));
 
-        material.color.setHex(activePath ? palette.accentSoft : palette.edge);
+        material.color.setHex(activePath ? 0xffffff : baseColor);
         material.opacity = activePath
-          ? 0.82 + Math.sin(time * 9) * 0.16
+          ? 0.96
           : edge.provenance
-            ? 0.66 + Math.sin(time * 4) * 0.12
-            : 0.48;
+            ? 0.72 + Math.sin(time * 4) * 0.16
+            : 0.5;
       }
 
       const previousMesh = previous ? nodeObjects.get(previous) : null;
@@ -462,8 +605,12 @@ export default function CognitionGraph({
         const progress = Math.min(elapsed / duration, 1);
         const eased = 1 - Math.pow(1 - progress, 3);
 
-        packet.position.lerpVectors(previousMesh.position, currentMesh.position, eased);
-        packetMaterial.opacity = progress < 1 ? 0.95 : 0;
+        packet.position.lerpVectors(
+          previousMesh.position,
+          currentMesh.position,
+          eased,
+        );
+        packetMaterial.opacity = progress < 1 ? 0.98 : 0;
         packet.scale.setScalar(1 + Math.sin(time * 18) * 0.2);
       } else {
         packetMaterial.opacity = 0;
@@ -519,11 +666,22 @@ export default function CognitionGraph({
   const provenanceCount =
     effectiveProvenance.memorySources.length + effectiveProvenance.tools.length;
 
+  const legendItems: Array<[string, number]> = [
+    ["USER", BASE_NODE_COLORS.user],
+    ["ROUTER", BASE_NODE_COLORS.router],
+    ["AGENT", BASE_NODE_COLORS.agent],
+    ["MEMORY", BASE_NODE_COLORS.memory],
+    ["TOOL", BASE_NODE_COLORS.tool],
+    ["MODEL", currentAccent().accent],
+  ];
+
   return (
     <section className="cognition-graph-panel">
       <div className="cognition-graph-header">
         <div>
-          <div className="cognition-graph-kicker">LIVE COGNITION + PROVENANCE MAP</div>
+          <div className="cognition-graph-kicker">
+            LIVE COGNITION + EVIDENCE TOPOLOGY
+          </div>
           <h2>C.O.R.E. Processing Graph</h2>
         </div>
         <div className={`cognition-link-state ${connected ? "online" : "offline"}`}>
@@ -534,11 +692,23 @@ export default function CognitionGraph({
       <div ref={mountRef} className="cognition-graph-canvas" />
 
       <div className="cognition-graph-legend">
-        {BASE_NODES.map((node) => (
-          <span key={node.id}>
-            {node.label}{activeNode === node.id ? " • ACTIVE" : ""}
+        {legendItems.map(([label, color]) => (
+          <span key={label} style={{ color: hexCss(color), borderColor: hexCss(color) }}>
+            {label}{activeNode === label.toLowerCase() ? " • ACTIVE" : ""}
           </span>
         ))}
+        <span style={{ color: hexCss(SOURCE_COLORS.policy), borderColor: hexCss(SOURCE_COLORS.policy) }}>
+          POLICY
+        </span>
+        <span style={{ color: hexCss(SOURCE_COLORS.historical), borderColor: hexCss(SOURCE_COLORS.historical) }}>
+          HISTORY
+        </span>
+        <span style={{ color: hexCss(SOURCE_COLORS.telemetry), borderColor: hexCss(SOURCE_COLORS.telemetry) }}>
+          LIVE DATA
+        </span>
+        <span style={{ color: hexCss(SOURCE_COLORS.external), borderColor: hexCss(SOURCE_COLORS.external) }}>
+          EXTERNAL INTEL
+        </span>
         <span>PROVENANCE SOURCES: {provenanceCount}</span>
       </div>
 
