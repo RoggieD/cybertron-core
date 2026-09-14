@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
+import type { TraceDetail } from "../api/traces";
 import {
   connectCoreWebSocket,
   type CoreEvent,
 } from "../api/websocket";
+import TraceReplayPanel from "../components/TraceReplayPanel";
 
 const CognitionGraph = lazy(
   () => import("../components/CognitionGraph"),
@@ -178,6 +180,81 @@ function joinValues(values: string[], empty = "NONE"): string {
   return values.length ? values.join(", ") : empty;
 }
 
+function provenanceForEvent(current: ProvenanceState, event: CoreEvent): ProvenanceState {
+  let next = current;
+
+  if (event.event_type === "prompt.received") {
+    next = { ...next, userInput: true };
+  }
+
+  const agent = agentLabel(event);
+  if (agent && event.event_type.startsWith("agent.")) {
+    next = { ...next, agent };
+  }
+
+  const tool = toolLabel(event);
+  if (tool && event.event_type.startsWith("tool.")) {
+    next = {
+      ...next,
+      tools: next.tools.includes(tool) ? next.tools : [...next.tools, tool],
+    };
+  }
+
+  const model = modelLabel(event);
+  if (model && event.event_type.startsWith("model.")) {
+    next = { ...next, model };
+  }
+
+  if (event.event_type === "memory.search_completed") {
+    const resultCount = numberValue(event.metadata?.result_count);
+    const scopes = stringList(event.metadata?.scopes);
+    const kinds = stringList(event.metadata?.kinds);
+    const sources = stringList(event.metadata?.sources);
+    const namespaces = stringList(event.metadata?.namespaces);
+    const fallbackScope = stringValue(event.metadata?.scope);
+
+    next = {
+      ...next,
+      memoryCount: resultCount,
+      memoryScopes: scopes.length
+        ? scopes
+        : fallbackScope && fallbackScope !== "none"
+          ? fallbackScope.split(",").map((value) => value.trim()).filter(Boolean)
+          : [],
+      memoryKinds: kinds,
+      memorySources: sources,
+      memoryNamespaces: namespaces,
+    };
+  }
+
+  return next;
+}
+
+function provenanceForEvents(events: CoreEvent[]): ProvenanceState {
+  return events.reduce(provenanceForEvent, { ...EMPTY_PROVENANCE });
+}
+
+function latestLabel(events: CoreEvent[], getter: (event: CoreEvent) => string | null, fallback: string): string {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const value = getter(events[index]);
+    if (value) return value;
+  }
+  return fallback;
+}
+
+function replayableEvents(events: CoreEvent[]): CoreEvent[] {
+  return events.filter(
+    (event, index) =>
+      event.event_type !== "model.token" ||
+      index === 0 ||
+      events[index - 1].event_type !== "model.token",
+  );
+}
+
+function delay(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 export default function ProcessingPage() {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<CoreEvent | null>(null);
@@ -190,10 +267,15 @@ export default function ProcessingPage() {
   const [activeModel, setActiveModel] = useState("UNKNOWN");
   const [memoryAction, setMemoryAction] = useState("IDLE");
   const [provenance, setProvenance] = useState<ProvenanceState>(EMPTY_PROVENANCE);
+  const [replaying, setReplaying] = useState(false);
+  const [viewMode, setViewMode] = useState<"LIVE" | "INSPECT" | "REPLAY">("LIVE");
 
   useEffect(() => {
     const socket = connectCoreWebSocket(
       (event) => {
+        if (replaying) return;
+
+        setViewMode("LIVE");
         setLastEvent(event);
         setStage(stageForEvent(event.event_type));
 
@@ -204,67 +286,24 @@ export default function ProcessingPage() {
           setActiveAgent("ROUTING...");
           setActiveTool("NONE");
           setMemoryAction("IDLE");
-          setProvenance({
-            ...EMPTY_PROVENANCE,
-            userInput: true,
-          });
+          setProvenance({ ...EMPTY_PROVENANCE, userInput: true });
         } else {
           setEventTrail((current) => appendTrail(current, event));
           setEventCount((count) => count + 1);
           if (event.trace_id) setTraceId(event.trace_id);
+          setProvenance((current) => provenanceForEvent(current, event));
         }
 
         const agent = agentLabel(event);
-        if (agent && event.event_type.startsWith("agent.")) {
-          setActiveAgent(agent);
-          setProvenance((current) => ({ ...current, agent }));
-        }
+        if (agent && event.event_type.startsWith("agent.")) setActiveAgent(agent);
 
         const tool = toolLabel(event);
-        if (tool && event.event_type.startsWith("tool.")) {
-          setActiveTool(tool);
-          setProvenance((current) => ({
-            ...current,
-            tools: current.tools.includes(tool)
-              ? current.tools
-              : [...current.tools, tool],
-          }));
-        }
+        if (tool && event.event_type.startsWith("tool.")) setActiveTool(tool);
 
         const model = modelLabel(event);
-        if (model && event.event_type.startsWith("model.")) {
-          setActiveModel(model);
-          setProvenance((current) => ({ ...current, model }));
-        }
+        if (model && event.event_type.startsWith("model.")) setActiveModel(model);
 
-        if (event.event_type.startsWith("memory.")) {
-          setMemoryAction(memoryLabel(event));
-        }
-
-        if (event.event_type === "memory.search_completed") {
-          const resultCount = numberValue(event.metadata?.result_count);
-          const scopes = stringList(event.metadata?.scopes);
-          const kinds = stringList(event.metadata?.kinds);
-          const sources = stringList(event.metadata?.sources);
-          const namespaces = stringList(event.metadata?.namespaces);
-          const fallbackScope = stringValue(event.metadata?.scope);
-
-          setProvenance((current) => ({
-            ...current,
-            memoryCount: resultCount,
-            memoryScopes: scopes.length
-              ? scopes
-              : fallbackScope && fallbackScope !== "none"
-                ? fallbackScope
-                    .split(",")
-                    .map((value) => value.trim())
-                    .filter(Boolean)
-                : [],
-            memoryKinds: kinds,
-            memorySources: sources,
-            memoryNamespaces: namespaces,
-          }));
-        }
+        if (event.event_type.startsWith("memory.")) setMemoryAction(memoryLabel(event));
 
         if (event.event_type === "response.generated") {
           window.setTimeout(() => setStage("IDLE"), 1600);
@@ -274,7 +313,65 @@ export default function ProcessingPage() {
     );
 
     return () => socket.close();
-  }, []);
+  }, [replaying]);
+
+  function inspectTrace(trace: TraceDetail) {
+    const events = trace.events;
+    const finalEvent = events.at(-1) ?? null;
+    setViewMode("INSPECT");
+    setTraceId(trace.trace_id);
+    setEventCount(trace.count);
+    setEventTrail(events.slice(-10));
+    setLastEvent(finalEvent);
+    setStage(trace.errored ? "ERROR" : trace.completed ? "COMPLETE" : finalEvent ? stageForEvent(finalEvent.event_type) : "IDLE");
+    setActiveAgent(latestLabel(events, agentLabel, "NONE"));
+    setActiveTool(latestLabel(events, toolLabel, "NONE"));
+    setActiveModel(latestLabel(events, modelLabel, "UNKNOWN"));
+    const memoryEvent = [...events].reverse().find((event) => event.event_type.startsWith("memory."));
+    setMemoryAction(memoryEvent ? memoryLabel(memoryEvent) : "IDLE");
+    setProvenance(provenanceForEvents(events));
+  }
+
+  async function replayTrace(trace: TraceDetail) {
+    setReplaying(true);
+    setViewMode("REPLAY");
+    setTraceId(trace.trace_id);
+    setEventTrail([]);
+    setEventCount(0);
+    setLastEvent(null);
+    setStage("IDLE");
+    setActiveAgent("NONE");
+    setActiveTool("NONE");
+    setActiveModel("UNKNOWN");
+    setMemoryAction("IDLE");
+    setProvenance({ ...EMPTY_PROVENANCE });
+
+    let replayProvenance = { ...EMPTY_PROVENANCE };
+    const events = replayableEvents(trace.events);
+
+    for (let index = 0; index < events.length; index += 1) {
+      const event = events[index];
+      replayProvenance = provenanceForEvent(replayProvenance, event);
+      setProvenance(replayProvenance);
+      setLastEvent(event);
+      setStage(stageForEvent(event.event_type));
+      setEventTrail((current) => appendTrail(current, event));
+      setEventCount(index + 1);
+
+      const agent = agentLabel(event);
+      if (agent && event.event_type.startsWith("agent.")) setActiveAgent(agent);
+      const tool = toolLabel(event);
+      if (tool && event.event_type.startsWith("tool.")) setActiveTool(tool);
+      const model = modelLabel(event);
+      if (model && event.event_type.startsWith("model.")) setActiveModel(model);
+      if (event.event_type.startsWith("memory.")) setMemoryAction(memoryLabel(event));
+
+      await delay(event.event_type === "model.token" ? 500 : 360);
+    }
+
+    setEventCount(trace.count);
+    setReplaying(false);
+  }
 
   const traceShort = useMemo(
     () => (traceId ? traceId.slice(0, 12) : "—"),
@@ -282,8 +379,7 @@ export default function ProcessingPage() {
   );
 
   const currentOperation = useMemo(
-    () =>
-      lastEvent ? describeEvent(lastEvent) : "Awaiting orchestration activity",
+    () => lastEvent ? describeEvent(lastEvent) : "Awaiting orchestration activity",
     [lastEvent],
   );
 
@@ -299,19 +395,20 @@ export default function ProcessingPage() {
       </div>
 
       <div className="core-processing-graph" style={{ marginBottom: 12 }}>
-        <Suspense
-          fallback={
-            <div className="core-graph-loading">
-              INITIALIZING COGNITION MAP…
-            </div>
-          }
-        >
-          <CognitionGraph event={lastEvent} connected={connected} />
+        <Suspense fallback={<div className="core-graph-loading">INITIALIZING COGNITION MAP…</div>}>
+          <CognitionGraph
+            event={lastEvent}
+            connected={connected}
+            provenance={{
+              memorySources: provenance.memorySources,
+              tools: provenance.tools,
+            }}
+          />
         </Suspense>
       </div>
 
       <div className={`processing-operation processing-operation-${stage.toLowerCase()}`}>
-        <span>NOW PROCESSING</span>
+        <span>{viewMode === "LIVE" ? "NOW PROCESSING" : `${viewMode} TRACE`}</span>
         <strong>{currentOperation}</strong>
         <small>{lastEvent?.event_type ?? "core.idle"}</small>
       </div>
@@ -331,31 +428,21 @@ export default function ProcessingPage() {
             <strong>{provenance.userInput ? "PRESENT" : "WAITING"}</strong>
             <small>Prompt content is not mirrored into telemetry.</small>
           </article>
-
           <article className={provenance.agent !== "NONE" ? "active" : ""}>
             <span>AGENT / POLICY</span>
             <strong title={provenance.agent}>{provenance.agent}</strong>
             <small>Selected orchestration authority.</small>
           </article>
-
           <article className={provenance.memoryCount !== null ? "active" : ""}>
             <span>PERSISTENT MEMORY</span>
-            <strong>
-              {provenance.memoryCount === null
-                ? "NOT QUERIED"
-                : `${provenance.memoryCount} RECORD${provenance.memoryCount === 1 ? "" : "S"}`}
-            </strong>
+            <strong>{provenance.memoryCount === null ? "NOT QUERIED" : `${provenance.memoryCount} RECORD${provenance.memoryCount === 1 ? "" : "S"}`}</strong>
             <small>Scopes: {joinValues(provenance.memoryScopes)}</small>
           </article>
-
           <article className={provenance.tools.length ? "active" : ""}>
             <span>TOOLS / LIVE DATA</span>
-            <strong title={joinValues(provenance.tools)}>
-              {joinValues(provenance.tools)}
-            </strong>
+            <strong title={joinValues(provenance.tools)}>{joinValues(provenance.tools)}</strong>
             <small>Verified runtime and external evidence path.</small>
           </article>
-
           <article className={provenance.model !== "UNKNOWN" ? "active" : ""}>
             <span>MODEL</span>
             <strong title={provenance.model}>{provenance.model}</strong>
@@ -364,101 +451,48 @@ export default function ProcessingPage() {
         </div>
 
         <div className="processing-provenance-detail">
-          <div>
-            <span>MEMORY SOURCES</span>
-            <strong title={joinValues(provenance.memorySources)}>
-              {joinValues(provenance.memorySources)}
-            </strong>
-          </div>
-          <div>
-            <span>MEMORY KINDS</span>
-            <strong title={joinValues(provenance.memoryKinds)}>
-              {joinValues(provenance.memoryKinds)}
-            </strong>
-          </div>
-          <div>
-            <span>NAMESPACES</span>
-            <strong title={joinValues(provenance.memoryNamespaces)}>
-              {joinValues(provenance.memoryNamespaces)}
-            </strong>
-          </div>
-          <div>
-            <span>EVIDENCE CHANNELS</span>
-            <strong>
-              {[
-                provenance.userInput ? "USER" : null,
-                provenance.memoryCount !== null ? "MEMORY" : null,
-                provenance.tools.length ? "TOOLS" : null,
-              ]
-                .filter(Boolean)
-                .join(" + ") || "NONE"}
-            </strong>
-          </div>
+          <div><span>MEMORY SOURCES</span><strong title={joinValues(provenance.memorySources)}>{joinValues(provenance.memorySources)}</strong></div>
+          <div><span>MEMORY KINDS</span><strong title={joinValues(provenance.memoryKinds)}>{joinValues(provenance.memoryKinds)}</strong></div>
+          <div><span>NAMESPACES</span><strong title={joinValues(provenance.memoryNamespaces)}>{joinValues(provenance.memoryNamespaces)}</strong></div>
+          <div><span>EVIDENCE CHANNELS</span><strong>{[
+            provenance.userInput ? "USER" : null,
+            provenance.memoryCount !== null ? "MEMORY" : null,
+            provenance.tools.length ? "TOOLS" : null,
+          ].filter(Boolean).join(" + ") || "NONE"}</strong></div>
         </div>
       </section>
 
       <div className="processing-status-grid">
-        <article>
-          <span>EVENT BUS</span>
-          <strong className={connected ? "online" : "warning"}>
-            {connected ? "CONNECTED" : "OFFLINE"}
-          </strong>
-        </article>
-        <article>
-          <span>CURRENT STAGE</span>
-          <strong>{stage}</strong>
-        </article>
-        <article>
-          <span>ACTIVE AGENT</span>
-          <strong title={activeAgent}>{activeAgent}</strong>
-        </article>
-        <article>
-          <span>ACTIVE TOOL</span>
-          <strong title={activeTool}>{activeTool}</strong>
-        </article>
-        <article>
-          <span>MEMORY</span>
-          <strong title={memoryAction}>{memoryAction}</strong>
-        </article>
-        <article>
-          <span>ACTIVE MODEL</span>
-          <strong title={activeModel}>{activeModel}</strong>
-        </article>
-        <article>
-          <span>TRACE ID</span>
-          <strong className="trace-id" title={traceId ?? undefined}>
-            {traceShort}
-          </strong>
-        </article>
-        <article>
-          <span>TRACE EVENTS</span>
-          <strong>{eventCount}</strong>
-        </article>
+        <article><span>EVENT BUS</span><strong className={connected ? "online" : "warning"}>{connected ? "CONNECTED" : "OFFLINE"}</strong></article>
+        <article><span>CURRENT STAGE</span><strong>{replaying ? "REPLAY" : stage}</strong></article>
+        <article><span>ACTIVE AGENT</span><strong title={activeAgent}>{activeAgent}</strong></article>
+        <article><span>ACTIVE TOOL</span><strong title={activeTool}>{activeTool}</strong></article>
+        <article><span>MEMORY</span><strong title={memoryAction}>{memoryAction}</strong></article>
+        <article><span>ACTIVE MODEL</span><strong title={activeModel}>{activeModel}</strong></article>
+        <article><span>TRACE ID</span><strong className="trace-id" title={traceId ?? undefined}>{traceShort}</strong></article>
+        <article><span>TRACE EVENTS</span><strong>{eventCount}</strong></article>
       </div>
 
       <aside className="processing-event-trail" style={{ width: "100%" }}>
         <div className="processing-event-trail-header">
-          <span>LIVE EVENT TRAIL</span>
+          <span>{viewMode === "LIVE" ? "LIVE EVENT TRAIL" : `${viewMode} EVENT TRAIL`}</span>
           <strong>{eventTrail.length}/10</strong>
         </div>
-
         <div className="processing-event-list">
           {eventTrail.length === 0 ? (
-            <div className="processing-event-empty">
-              Awaiting orchestration activity…
-            </div>
+            <div className="processing-event-empty">Awaiting orchestration activity…</div>
           ) : (
             [...eventTrail].reverse().map((event) => (
               <div className="processing-event-item" key={event.event_id}>
                 <span>{describeEvent(event)}</span>
-                <small>
-                  {event.event_type} · {new Date(event.timestamp).toLocaleTimeString()}
-                </small>
+                <small>{event.event_type} · {new Date(event.timestamp).toLocaleTimeString()}</small>
               </div>
             ))
           )}
         </div>
       </aside>
+
+      <TraceReplayPanel onLoad={inspectTrace} onReplay={replayTrace} replaying={replaying} />
     </section>
   );
 }
