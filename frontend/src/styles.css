@@ -533,3 +533,97 @@ footer {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Telemetry-driven visual state */
+
+.telemetry-state.telemetry-healthy,
+.reactor-health.telemetry-healthy {
+  color: #64ffd8;
+}
+
+.telemetry-state.telemetry-elevated,
+.reactor-health.telemetry-elevated {
+  color: #ffd166;
+}
+
+.telemetry-state.telemetry-warning,
+.reactor-health.telemetry-warning {
+  color: #ff6b6b;
+}
+
+.reactor-health {
+  margin-left: 0.35rem;
+  font-size: 0.72em;
+  letter-spacing: 0.12em;
+}
+
+/*
+ * Telemetry influences the reactor only while idle.
+ * Active agent/tool/model states remain authoritative.
+ */
+
+.reactor-idle.telemetry-healthy .reactor-core {
+  filter: brightness(1);
+}
+
+.reactor-idle.telemetry-elevated .reactor-core {
+  filter: brightness(1.25);
+  animation: telemetry-elevated-pulse 1.4s ease-in-out infinite;
+}
+
+.reactor-idle.telemetry-elevated .reactor-ring {
+  filter: brightness(1.2);
+}
+
+.reactor-idle.telemetry-warning .reactor-core {
+  filter: brightness(1.5);
+  animation: telemetry-warning-pulse 0.8s ease-in-out infinite;
+}
+
+.reactor-idle.telemetry-warning .reactor-ring {
+  filter: brightness(1.35);
+  animation: telemetry-warning-ring 1.2s linear infinite;
+}
+
+.telemetry-card .warning,
+.telemetry-warning {
+  text-shadow: 0 0 10px currentColor;
+}
+
+@keyframes telemetry-elevated-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.88;
+  }
+
+  50% {
+    transform: scale(1.07);
+    opacity: 1;
+  }
+}
+
+@keyframes telemetry-warning-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+
+  50% {
+    transform: scale(1.13);
+    opacity: 1;
+  }
+}
+
+@keyframes telemetry-warning-ring {
+  0% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.45;
+  }
+}

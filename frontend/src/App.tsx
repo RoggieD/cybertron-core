@@ -22,6 +22,42 @@ type ReactorState =
   | "COMPLETE"
   | "ERROR";
 
+type TelemetryState =
+  | "HEALTHY"
+  | "ELEVATED"
+  | "WARNING";
+
+function getTelemetryState(
+  overview: StatusOverview | null,
+  error: boolean
+): TelemetryState {
+  if (error) {
+    return "WARNING";
+  }
+
+  if (!overview) {
+    return "HEALTHY";
+  }
+
+  if (
+    overview.services.unreachable > 0 ||
+    overview.system.disk.usage_percent >= 95
+  ) {
+    return "WARNING";
+  }
+
+  if (
+    overview.system.cpu.usage_percent >= 75 ||
+    overview.system.memory.usage_percent >= 80 ||
+    overview.system.disk.usage_percent >= 85
+  ) {
+    return "ELEVATED";
+  }
+
+  return "HEALTHY";
+}
+
+
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -271,6 +307,11 @@ export default function App() {
     }
   }
 
+  const telemetryState = getTelemetryState(
+    overview,
+    overviewError
+  );
+
   const busy =
     reactorState === "ROUTING" ||
     reactorState === "AGENT_ACTIVE" ||
@@ -292,7 +333,7 @@ export default function App() {
       </section>
 
       <section
-        className={`reactor-panel reactor-${reactorState.toLowerCase()}`}
+        className={`reactor-panel reactor-${reactorState.toLowerCase()} telemetry-${telemetryState.toLowerCase()}`}
       >
         <div className="reactor">
           <div className="reactor-core" />
@@ -303,6 +344,11 @@ export default function App() {
 
         <div className="state-label">
           {reactorState}
+          {reactorState === "IDLE" && (
+            <span className={`reactor-health telemetry-${telemetryState.toLowerCase()}`}>
+              {" "}• {telemetryState}
+            </span>
+          )}
         </div>
       </section>
 
@@ -350,13 +396,11 @@ export default function App() {
           </div>
 
           <div
-            className={
-              overviewError
-                ? "telemetry-state warning"
-                : "telemetry-state online"
-            }
+            className={`telemetry-state telemetry-${telemetryState.toLowerCase()}`}
           >
-            {overviewError ? "LINK ERROR" : "LIVE"}
+            {overviewError
+              ? "LINK ERROR"
+              : telemetryState}
           </div>
         </div>
 
