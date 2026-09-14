@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_num_predict: int = 4096
     ollama_num_ctx: int = 32768
-    kokoro_base_url: str = "http://172.19.0.5:8880/v1"
+    kokoro_base_url: str = "http://localhost:8880/v1"
+    kokoro_container_name: str = "kokoro-fastapi"
+    kokoro_container_port: int = 8880
     kokoro_model: str = "kokoro"
     kokoro_voice: str = "af_heart"
     database_url: str = "sqlite:///./data/cybertron.db"
