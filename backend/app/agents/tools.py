@@ -1,3 +1,4 @@
+from backend.app.services.catalog import resolve_service
 import re
 
 from backend.app.agents.base import AgentDefinition
@@ -48,6 +49,14 @@ def select_tool(
         if container_name is not None:
             return "docker.inspect", {
                 "container_name": container_name,
+            }
+
+        service = resolve_service(message)
+
+        if service is not None:
+            return "network.reachability", {
+                "target": service["target"],
+                "service_name": service["name"],
             }
 
         url = extract_url(message)

@@ -99,12 +99,16 @@ async def network_reachability(
     target: str | None = None,
     host: str | None = None,
     port: int | None = None,
+    service_name: str | None = None,
 ) -> dict:
     if target:
         parsed = urlparse(target)
 
         if parsed.scheme in {"http", "https"}:
-            return await _check_http(target)
+            result = await _check_http(target)
+            if service_name:
+                result["service_name"] = service_name
+            return result
 
         if ":" in target:
             candidate_host, candidate_port = target.rsplit(":", 1)
@@ -118,13 +122,19 @@ async def network_reachability(
                     "error": "Invalid TCP target.",
                 }
 
-            return await _check_tcp(
+            result = await _check_tcp(
                 candidate_host,
                 parsed_port,
             )
+            if service_name:
+                result["service_name"] = service_name
+            return result
 
     if host and port:
-        return await _check_tcp(host, port)
+        result = await _check_tcp(host, port)
+        if service_name:
+            result["service_name"] = service_name
+        return result
 
     return {
         "reachable": False,

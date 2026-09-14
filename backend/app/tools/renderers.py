@@ -554,13 +554,23 @@ def render_reachability(result: dict) -> str:
     reachable = bool(result.get("reachable"))
     latency = result.get("latency_ms")
 
+    service_name = result.get("service_name")
+
     lines = [
         "SERVICE REACHABILITY — VERIFIED",
         "",
-        f"Target: {target}",
-        f"Reachable: {'yes' if reachable else 'no'}",
-        f"Protocol: {check_type.upper()}",
     ]
+
+    if service_name:
+        lines.append(f"Service: {service_name}")
+
+    lines.extend(
+        [
+            f"Target: {target}",
+            f"Reachable: {'yes' if reachable else 'no'}",
+            f"Protocol: {check_type.upper()}",
+        ]
+    )
 
     if check_type == "http":
         status_code = result.get("status_code")
