@@ -627,3 +627,347 @@ footer {
     opacity: 0.45;
   }
 }
+
+/* Interactive service matrix */
+
+.service-health-panel {
+  width: min(1180px, 94vw);
+  margin: 18px auto;
+  padding: 18px;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  background: rgba(3, 14, 20, 0.76);
+}
+
+.service-health-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.service-health-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-health-header span,
+.service-detail span,
+.service-target span {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+}
+
+.service-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.service-card {
+  appearance: none;
+  text-align: left;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 255, 255, 0.55);
+}
+
+.service-card.selected {
+  border-color: currentColor;
+  box-shadow:
+    0 0 14px rgba(0, 255, 255, 0.15),
+    inset 0 0 18px rgba(0, 255, 255, 0.04);
+}
+
+.service-card span {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+}
+
+.service-card strong {
+  font-size: 1rem;
+}
+
+.service-card small {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+}
+
+.service-up strong {
+  color: #64ffd8;
+}
+
+.service-down {
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+.service-down strong {
+  color: #ff6b6b;
+}
+
+.service-detail {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(0, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.27);
+}
+
+.service-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.service-detail-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-detail-heading button {
+  border: 1px solid rgba(0, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+}
+
+.service-detail-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.service-detail-grid > div {
+  padding: 10px;
+  border: 1px solid rgba(0, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-target {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.service-target code {
+  overflow-wrap: anywhere;
+  opacity: 0.85;
+}
+
+.service-error {
+  margin-top: 12px;
+  color: #ff6b6b;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .service-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .service-detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .service-card-grid,
+  .service-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Interactive service matrix */
+
+.service-health-panel {
+  width: min(1180px, 94vw);
+  margin: 18px auto;
+  padding: 18px;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  background: rgba(3, 14, 20, 0.76);
+}
+
+.service-health-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.service-health-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-health-header span,
+.service-detail span,
+.service-target span {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+}
+
+.service-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.service-card {
+  appearance: none;
+  text-align: left;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 255, 255, 0.55);
+}
+
+.service-card.selected {
+  border-color: currentColor;
+  box-shadow:
+    0 0 14px rgba(0, 255, 255, 0.15),
+    inset 0 0 18px rgba(0, 255, 255, 0.04);
+}
+
+.service-card span {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+}
+
+.service-card strong {
+  font-size: 1rem;
+}
+
+.service-card small {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+}
+
+.service-up strong {
+  color: #64ffd8;
+}
+
+.service-down {
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+.service-down strong {
+  color: #ff6b6b;
+}
+
+.service-detail {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(0, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.27);
+}
+
+.service-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.service-detail-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-detail-heading button {
+  border: 1px solid rgba(0, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+}
+
+.service-detail-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.service-detail-grid > div {
+  padding: 10px;
+  border: 1px solid rgba(0, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-target {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.service-target code {
+  overflow-wrap: anywhere;
+  opacity: 0.85;
+}
+
+.service-error {
+  margin-top: 12px;
+  color: #ff6b6b;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .service-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .service-detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .service-card-grid,
+  .service-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

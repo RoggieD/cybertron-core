@@ -3,7 +3,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { getHealth } from "./api/core";
 import {
   getStatusOverview,
-  type StatusOverview
+  getServiceStatus,
+  type StatusOverview,
+  type ServiceHealthItem
 } from "./api/status";
 import { streamChat, type StreamEvent } from "./api/chat";
 import {
@@ -93,17 +95,36 @@ export default function App() {
   const [overview, setOverview] =
     useState<StatusOverview | null>(null);
   const [overviewError, setOverviewError] = useState(false);
+  const [services, setServices] = useState<ServiceHealthItem[]>([]);
+  const [selectedService, setSelectedService] =
+    useState<ServiceHealthItem | null>(null);
 
   useEffect(() => {
     let active = true;
 
     const refresh = async () => {
       try {
-        const data = await getStatusOverview();
+        const [data, serviceData] = await Promise.all([
+          getStatusOverview(),
+          getServiceStatus()
+        ]);
 
         if (active) {
           setOverview(data);
+          setServices(serviceData.services);
           setOverviewError(false);
+
+          setSelectedService((current) => {
+            if (!current) {
+              return null;
+            }
+
+            return (
+              serviceData.services.find(
+                (service) => service.name === current.name
+              ) ?? current
+            );
+          });
         }
       } catch {
         if (active) {
@@ -496,6 +517,122 @@ export default function App() {
             <small>ACTIVE SOCKETS</small>
           </article>
         </div>
+      </section>
+
+      <section className="service-health-panel">
+        <div className="service-health-header">
+          <div>
+            <span>SERVICE MATRIX</span>
+            <strong>
+              {overview
+                ? `${overview.services.reachable}/${overview.services.total} OPERATIONAL`
+                : "ACQUIRING..."}
+            </strong>
+          </div>
+        </div>
+
+        <div className="service-card-grid">
+          {services.map((service) => (
+            <button
+              type="button"
+              key={service.name}
+              className={`service-card ${
+                service.reachable
+                  ? "service-up"
+                  : "service-down"
+              } ${
+                selectedService?.name === service.name
+                  ? "selected"
+                  : ""
+              }`}
+              onClick={() => setSelectedService(service)}
+            >
+              <span>{service.name}</span>
+
+              <strong>
+                {service.reachable ? "ONLINE" : "OFFLINE"}
+              </strong>
+
+              <small>
+                {service.scope.toUpperCase()}
+                {typeof service.latency_ms === "number"
+                  ? ` • ${service.latency_ms} ms`
+                  : ""}
+              </small>
+            </button>
+          ))}
+        </div>
+
+        {selectedService && (
+          <div className="service-detail">
+            <div className="service-detail-heading">
+              <div>
+                <span>SELECTED SERVICE</span>
+                <strong>{selectedService.name}</strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedService(null)}
+              >
+                CLOSE
+              </button>
+            </div>
+
+            <div className="service-detail-grid">
+              <div>
+                <span>STATE</span>
+                <strong
+                  className={
+                    selectedService.reachable
+                      ? "online"
+                      : "warning"
+                  }
+                >
+                  {selectedService.reachable
+                    ? "ONLINE"
+                    : "OFFLINE"}
+                </strong>
+              </div>
+
+              <div>
+                <span>SCOPE</span>
+                <strong>
+                  {selectedService.scope.toUpperCase()}
+                </strong>
+              </div>
+
+              <div>
+                <span>HTTP</span>
+                <strong>
+                  {selectedService.status_code ?? "N/A"}
+                </strong>
+              </div>
+
+              <div>
+                <span>LATENCY</span>
+                <strong>
+                  {typeof selectedService.latency_ms === "number"
+                    ? `${selectedService.latency_ms} ms`
+                    : "N/A"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="service-target">
+              <span>TARGET</span>
+              <code>
+                {selectedService.target ?? "Not reported"}
+              </code>
+            </div>
+
+            {selectedService.error && (
+              <div className="service-error">
+                {selectedService.error}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="status-grid">
