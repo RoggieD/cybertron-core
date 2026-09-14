@@ -12,6 +12,7 @@ from backend.app.tools.system import system_snapshot
 from backend.app.tools.processes import process_inventory
 from backend.app.tools.network import network_interfaces
 from backend.app.tools.listeners import listener_inventory, port_owner
+from backend.app.tools.security import security_snapshot
 
 
 TOOLS = {
@@ -33,6 +34,17 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=process_inventory,
+    ),
+    "security.snapshot": ToolDefinition(
+        id="security.snapshot",
+        name="Defensive Posture Snapshot",
+        description=(
+            "Read-only local defensive posture assessment using verified "
+            "listener, process, and host telemetry."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=security_snapshot,
     ),
     "network.port_owner": ToolDefinition(
         id="network.port_owner",
