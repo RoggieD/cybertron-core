@@ -202,8 +202,6 @@ function eventNode(eventType: string): NodeId | null {
   if (eventType.startsWith("memory.")) return "memory";
   if (eventType.startsWith("tool.")) return "tool";
   if (eventType.startsWith("model.")) return "model";
-  // Keep the evidence topology visually dominant after completion instead of
-  // turning USER into the giant active node again.
   if (eventType === "response.generated") return null;
   return null;
 }
@@ -264,33 +262,67 @@ function createLabel(
   color: number,
 ) {
   const canvas = document.createElement("canvas");
-  canvas.width = provenance ? 640 : 512;
-  canvas.height = 112;
+  canvas.width = provenance ? 1536 : 1024;
+  canvas.height = 256;
 
   const context = canvas.getContext("2d");
   if (!context) return null;
 
   const cssColor = hexCss(color);
+  const fontSize = provenance ? 62 : 72;
+  const paddingX = 42;
+  const paddingY = 26;
+
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.font = provenance ? "600 27px monospace" : "600 34px monospace";
+  context.font = `700 ${fontSize}px monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
+
+  const metrics = context.measureText(text);
+  const panelWidth = Math.min(
+    canvas.width - 24,
+    Math.max(metrics.width + paddingX * 2, provenance ? 420 : 300),
+  );
+  const panelHeight = fontSize + paddingY * 2;
+  const panelX = (canvas.width - panelWidth) / 2;
+  const panelY = (canvas.height - panelHeight) / 2;
+
+  context.fillStyle = "rgba(0, 5, 7, 0.86)";
+  context.strokeStyle = cssColor;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.roundRect(panelX, panelY, panelWidth, panelHeight, 18);
+  context.fill();
+  context.stroke();
+
+  context.shadowColor = "rgba(0, 0, 0, 0.95)";
+  context.shadowBlur = 2;
+  context.lineWidth = provenance ? 10 : 12;
+  context.strokeStyle = "rgba(0, 0, 0, 0.96)";
+  context.strokeText(text, canvas.width / 2, canvas.height / 2 + 2);
+
   context.shadowColor = cssColor;
-  context.shadowBlur = provenance ? 10 : 14;
-  context.fillStyle = provenance ? "#f7fff5" : cssColor;
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  context.shadowBlur = 4;
+  context.fillStyle = provenance ? "#ffffff" : cssColor;
+  context.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
 
   const material = new THREE.SpriteMaterial({
     map: texture,
     transparent: true,
     depthWrite: false,
+    depthTest: false,
   });
 
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(provenance ? 3.1 : 2.3, provenance ? 0.54 : 0.58, 1);
+  sprite.scale.set(provenance ? 4.4 : 3.25, provenance ? 0.74 : 0.8, 1);
+  sprite.renderOrder = 20;
 
   return { sprite, material, texture };
 }
@@ -381,7 +413,7 @@ export default function CognitionGraph({
       0.1,
       100,
     );
-    camera.position.set(0, 0.05, 12.2);
+    camera.position.set(0, 0.05, 11.4);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -480,7 +512,7 @@ export default function CognitionGraph({
       const label = createLabel(node.label, !!node.provenance, nodeColor);
       if (label) {
         label.sprite.position.copy(mesh.position);
-        label.sprite.position.y -= node.provenance ? 0.63 : 0.9;
+        label.sprite.position.y -= node.provenance ? 0.78 : 1.02;
         scene.add(label.sprite);
         labels.push({ material: label.material, texture: label.texture });
       }
@@ -689,7 +721,11 @@ export default function CognitionGraph({
         </div>
       </div>
 
-      <div ref={mountRef} className="cognition-graph-canvas" />
+      <div
+        ref={mountRef}
+        className="cognition-graph-canvas"
+        style={{ height: "560px" }}
+      />
 
       <div className="cognition-graph-legend">
         {legendItems.map(([label, color]) => (
