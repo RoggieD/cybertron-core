@@ -158,10 +158,12 @@ function hasVerifiedToolHeader(text: string): boolean {
 }
 
 type DashboardPageProps = {
+  visible?: boolean;
   onVoiceAgentStateChange?: (state: VoiceAgentRuntimeState) => void;
 };
 
 export default function DashboardPage({
+  visible = true,
   onVoiceAgentStateChange,
 }: DashboardPageProps) {
   const [apiStatus, setApiStatus] = useState("CHECKING");
@@ -669,6 +671,30 @@ export default function DashboardPage({
   ].includes(voiceState);
 
   useEffect(() => {
+    const handleVoiceAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+
+      if (action === "listen") {
+        if (voiceState === "LISTENING") {
+          stopListening();
+        } else if (
+          !busy &&
+          microphoneReady &&
+          voiceState !== "TRANSCRIBING" &&
+          voiceState !== "SPEAKING"
+        ) {
+          void startListening();
+        }
+      } else if (action === "stop-speaking" && voiceState === "SPEAKING") {
+        stopSpeaking();
+      }
+    };
+
+    window.addEventListener("cybertron:voice-action", handleVoiceAction);
+    return () => window.removeEventListener("cybertron:voice-action", handleVoiceAction);
+  }, [busy, microphoneReady, voiceState]);
+
+  useEffect(() => {
     onVoiceAgentStateChange?.({
       activeAgent,
       activeTool,
@@ -688,7 +714,7 @@ export default function DashboardPage({
   ]);
 
   return (
-    <main className="core-shell">
+    <main className={`core-shell ${visible ? "" : "core-shell-controller-hidden"}`}>
       <section className="header">
         <p className="eyebrow">CYBERTRON SYSTEMS</p>
         <h1>

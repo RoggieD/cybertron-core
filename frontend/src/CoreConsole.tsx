@@ -62,17 +62,6 @@ export default function CoreConsole() {
   }, [page]);
 
   useEffect(() => {
-    if (page === "dashboard") return;
-
-    setVoiceAgentState((current) => ({
-      ...current,
-      orchestrationState: "IDLE",
-      speechAnalyser: null,
-      voiceState: current.voiceState === "OFFLINE" ? "OFFLINE" : "READY",
-    }));
-  }, [page]);
-
-  useEffect(() => {
     const handlePopState = () => {
       setPage(pageFromPath(window.location.pathname));
     };
@@ -94,9 +83,10 @@ export default function CoreConsole() {
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
       <VoiceAgent3D {...voiceAgentState} />
-      {page === "dashboard" && (
-        <DashboardPage onVoiceAgentStateChange={updateVoiceAgentState} />
-      )}
+      <DashboardPage
+        visible={page === "dashboard"}
+        onVoiceAgentStateChange={updateVoiceAgentState}
+      />
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}
       {page === "services" && <ServicesPage />}

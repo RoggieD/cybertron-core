@@ -522,3 +522,6 @@ html[data-core-theme="neon-green"] .trace-replay-panel { border-color: rgba(201,
   .trace-replay-list article { grid-template-columns: 1fr 1fr; }
   .trace-replay-actions { grid-column: 1 / -1; }
 }
+.core-shell-controller-hidden {
+  display: none !important;
+}

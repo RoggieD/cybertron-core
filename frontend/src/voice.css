@@ -161,6 +161,7 @@ body.voice-agent-dragging {
 
 .voice-agent-minimized .voice-agent-operation,
 .voice-agent-minimized .voice-agent-canvas,
+.voice-agent-minimized .voice-agent-controls,
 .voice-agent-minimized .voice-agent-caption {
   display: none;
 }
@@ -195,8 +196,45 @@ body.voice-agent-resizing {
 
 .voice-agent-canvas {
   position: absolute;
-  inset: 68px 0 34px 0;
+  inset: 68px 0 58px 0;
   pointer-events: none;
+}
+
+.voice-agent-controls {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: 29px;
+  left: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.voice-agent-controls button {
+  appearance: none;
+  min-width: 126px;
+  border: 1px solid color-mix(in srgb, currentColor 42%, transparent);
+  background: rgba(0, 0, 0, 0.4);
+  color: currentColor;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 0.5rem;
+  letter-spacing: 0.11em;
+}
+
+.voice-agent-controls button:hover:not(:disabled),
+.voice-agent-controls button.active {
+  border-color: currentColor;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.voice-agent-controls button.active {
+  animation: voice-agent-state-pulse 0.65s ease-in-out infinite;
+}
+
+.voice-agent-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
 }
 
 .voice-agent-operation {

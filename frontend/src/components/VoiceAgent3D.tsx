@@ -178,6 +178,12 @@ function displayValue(value: string | undefined, fallback: string) {
   return normalized && normalized !== "NONE" ? normalized : fallback;
 }
 
+function sendVoiceAction(action: "listen" | "stop-speaking") {
+  window.dispatchEvent(
+    new CustomEvent("cybertron:voice-action", { detail: { action } }),
+  );
+}
+
 export default function VoiceAgent3D({
   active = true,
   activeAgent,
@@ -209,8 +215,10 @@ export default function VoiceAgent3D({
     orchestrationState,
   );
   const operationActiveRef = useRef(operationActive);
+  const orchestrationStateRef = useRef(orchestrationState);
   const speechAnalyserRef = useRef<AnalyserNode | null>(speechAnalyser);
   operationActiveRef.current = operationActive;
+  orchestrationStateRef.current = orchestrationState;
   speechAnalyserRef.current = speechAnalyser;
 
   useEffect(() => {
@@ -324,6 +332,39 @@ export default function VoiceAgent3D({
     ringTwo.rotation.y = Math.PI / 2.25;
     group.add(ringTwo);
 
+    const scanMaterial = new THREE.MeshBasicMaterial({
+      color: 0x53e6ff,
+      transparent: true,
+      opacity: 0.12,
+    });
+    const scanRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1.18, 0.012, 8, 72),
+      scanMaterial,
+    );
+    scanRing.rotation.x = Math.PI / 2;
+    group.add(scanRing);
+
+    const satelliteGeometry = new THREE.SphereGeometry(0.09, 16, 16);
+    const agentMaterial = new THREE.MeshBasicMaterial({
+      color: 0x53e6ff,
+      transparent: true,
+      opacity: 0.18,
+    });
+    const toolMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffd166,
+      transparent: true,
+      opacity: 0.18,
+    });
+    const modelMaterial = new THREE.MeshBasicMaterial({
+      color: 0x8f7dff,
+      transparent: true,
+      opacity: 0.18,
+    });
+    const agentNode = new THREE.Mesh(satelliteGeometry, agentMaterial);
+    const toolNode = new THREE.Mesh(satelliteGeometry, toolMaterial);
+    const modelNode = new THREE.Mesh(satelliteGeometry, modelMaterial);
+    group.add(agentNode, toolNode, modelNode);
+
     const particlesGeometry = new THREE.BufferGeometry();
     const particleCount = 150;
     const positions = new Float32Array(particleCount * 3);
@@ -394,6 +435,7 @@ export default function VoiceAgent3D({
       key.color.lerp(secondary, 0.08);
 
       const isOperating = operationActiveRef.current;
+      const operationStage = orchestrationStateRef.current;
       const operationEnergy = isOperating ? 1.28 : 1;
       const pulseRate = state === "SPEAKING" ? 7.5 : state === "LISTENING" ? 4.2 : isOperating ? 3.2 : 2.1;
       const pulse = 1 + Math.sin(elapsed * pulseRate) * 0.055 * palette.energy * operationEnergy + smoothedAudioEnergy * 0.2;
@@ -410,6 +452,37 @@ export default function VoiceAgent3D({
       particles.rotation.x = Math.sin(elapsed * 0.22) * 0.12;
       particlesMaterial.size = 0.025 + smoothedAudioEnergy * 0.055;
       particlesMaterial.opacity = 0.55 + smoothedAudioEnergy * 0.35;
+
+      const agentActive = ["AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(operationStage);
+      const toolActive = operationStage === "TOOL_ACTIVE";
+      const modelActive = operationStage === "THINKING";
+      const satelliteStates = [
+        { node: agentNode, material: agentMaterial, active: agentActive, radius: 1.72, speed: 0.72, phase: 0 },
+        { node: toolNode, material: toolMaterial, active: toolActive, radius: 1.96, speed: -0.58, phase: 2.1 },
+        { node: modelNode, material: modelMaterial, active: modelActive, radius: 2.2, speed: 0.46, phase: 4.2 },
+      ];
+
+      satelliteStates.forEach(({ node, material, active: nodeActive, radius, speed, phase }) => {
+        const angle = elapsed * speed + phase;
+        node.position.set(
+          Math.cos(angle) * radius,
+          Math.sin(angle * 1.45) * 0.72,
+          Math.sin(angle) * radius * 0.46,
+        );
+        material.opacity = THREE.MathUtils.lerp(material.opacity, nodeActive ? 0.96 : 0.16, 0.12);
+        const nodeScale = nodeActive
+          ? 1.15 + Math.sin(elapsed * 6 + phase) * 0.22
+          : 0.72;
+        node.scale.setScalar(nodeScale);
+      });
+
+      scanRing.position.y = ((elapsed * (isOperating ? 0.85 : 0.3)) % 2.5) - 1.25;
+      scanMaterial.opacity = THREE.MathUtils.lerp(
+        scanMaterial.opacity,
+        isOperating ? 0.48 : 0.1,
+        0.08,
+      );
+      scanRing.scale.setScalar(0.72 + (1 - Math.abs(scanRing.position.y) / 1.4) * 0.42);
 
       if (state === "SPEAKING") {
         group.position.y = Math.sin(elapsed * 5.5) * 0.035 + smoothedAudioEnergy * 0.025;
@@ -441,8 +514,14 @@ export default function VoiceAgent3D({
       innerMaterial.dispose();
       ringOne.geometry.dispose();
       ringTwo.geometry.dispose();
+      scanRing.geometry.dispose();
+      satelliteGeometry.dispose();
       (ringOne.material as THREE.Material).dispose();
       (ringTwo.material as THREE.Material).dispose();
+      scanMaterial.dispose();
+      agentMaterial.dispose();
+      toolMaterial.dispose();
+      modelMaterial.dispose();
       particlesMaterial.dispose();
       if (renderer.domElement.parentElement === mount) {
         mount.removeChild(renderer.domElement);
@@ -591,6 +670,22 @@ export default function VoiceAgent3D({
         </div>
       </div>
       <div ref={mountRef} className="voice-agent-canvas" aria-hidden="true" />
+      <div className="voice-agent-controls">
+        {voiceState === "SPEAKING" ? (
+          <button type="button" onClick={() => sendVoiceAction("stop-speaking")}>
+            ■ STOP SPEAKING
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={voiceState === "LISTENING" ? "active" : ""}
+            onClick={() => sendVoiceAction("listen")}
+            disabled={!["READY", "LISTENING"].includes(voiceState)}
+          >
+            {voiceState === "LISTENING" ? "■ STOP LISTENING" : "● LISTEN"}
+          </button>
+        )}
+      </div>
       <div className="voice-agent-caption">
         <span>WHISPER</span>
         <i>→</i>
