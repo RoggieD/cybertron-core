@@ -2,22 +2,53 @@ from backend.app.agents.base import AgentDefinition
 from backend.app.tools.registry import execute_tool
 
 
-AGENT_TOOL_MAP = {
-    "system": "system.snapshot",
-    "infrastructure": "docker.inventory",
-}
-
-
-def tool_for_agent(
+def select_tool(
     agent: AgentDefinition,
+    message: str,
 ) -> str | None:
-    return AGENT_TOOL_MAP.get(agent.id)
+    normalized = message.lower()
+
+    if agent.id == "system":
+        process_terms = (
+            "process",
+            "processes",
+            "running processes",
+            "top processes",
+        )
+
+        if any(term in normalized for term in process_terms):
+            return "system.processes"
+
+        return "system.snapshot"
+
+    if agent.id == "infrastructure":
+        network_terms = (
+            "network",
+            "interface",
+            "interfaces",
+            "ip address",
+            "ip addresses",
+            "ethernet",
+            "adapter",
+            "adapters",
+        )
+
+        if any(term in normalized for term in network_terms):
+            return "network.interfaces"
+
+        return "docker.inventory"
+
+    return None
 
 
 async def run_agent_tool(
     agent: AgentDefinition,
+    message: str,
 ) -> tuple[str | None, dict | None]:
-    tool_id = tool_for_agent(agent)
+    tool_id = select_tool(
+        agent,
+        message,
+    )
 
     if tool_id is None:
         return None, None

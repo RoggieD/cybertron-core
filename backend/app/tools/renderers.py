@@ -196,6 +196,12 @@ def render_verified_tool_result(
     if tool_id == "docker.inventory":
         return render_docker_inventory(result)
 
+    if tool_id == "system.processes":
+        return render_process_inventory(result)
+
+    if tool_id == "network.interfaces":
+        return render_network_interfaces(result)
+
     return None
 
 
@@ -243,4 +249,85 @@ def should_return_verified_only(
     if tool_id == "system.snapshot":
         return normalized in system_requests
 
+    process_requests = {
+        "show running processes",
+        "show running processes.",
+        "show processes",
+        "show processes.",
+        "list processes",
+        "list processes.",
+        "show top processes",
+        "show top processes.",
+    }
+
+    network_requests = {
+        "show network interfaces",
+        "show network interfaces.",
+        "show interfaces",
+        "show interfaces.",
+        "show ip addresses",
+        "show ip addresses.",
+        "show network",
+        "show network.",
+    }
+
+    if tool_id == "system.processes":
+        return normalized in process_requests
+
+    if tool_id == "network.interfaces":
+        return normalized in network_requests
+
     return False
+
+
+def render_process_inventory(result: dict) -> str:
+    processes = result.get("processes", [])
+
+    lines = [
+        "PROCESS INVENTORY — VERIFIED",
+        "",
+        f"Total processes observed: {result.get('count', 0)}",
+        f"Processes returned: {result.get('returned', len(processes))}",
+        "",
+        "Top returned processes:",
+    ]
+
+    for index, process in enumerate(processes, start=1):
+        lines.append(
+            f"{index}. "
+            f"PID {process.get('pid')} | "
+            f"{process.get('name', 'unknown')} | "
+            f"CPU {process.get('cpu_percent', 0)}% | "
+            f"MEM {process.get('memory_percent', 0)}% | "
+            f"STATUS {process.get('status', 'unknown')}"
+        )
+
+    return "\n".join(lines)
+
+
+def render_network_interfaces(result: dict) -> str:
+    interfaces = result.get("interfaces", [])
+
+    lines = [
+        "NETWORK INTERFACES — VERIFIED",
+        "",
+        f"Interface count: {result.get('count', len(interfaces))}",
+        "",
+    ]
+
+    for interface in interfaces:
+        lines.append(
+            f"{interface.get('name', 'unknown')} | "
+            f"UP: {interface.get('up')} | "
+            f"SPEED: {interface.get('speed_mbps')} Mbps | "
+            f"MTU: {interface.get('mtu')}"
+        )
+
+        for address in interface.get("addresses", []):
+            lines.append(
+                f"  - {address.get('family')} | "
+                f"{address.get('address')} | "
+                f"netmask {address.get('netmask')}"
+            )
+
+    return "\n".join(lines)

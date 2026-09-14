@@ -114,7 +114,7 @@ async def chat(request: ChatRequest) -> dict:
             )
         )
 
-        tool_id, tool_result = await run_agent_tool(agent)
+        tool_id, tool_result = await run_agent_tool(agent, request.message)
         verified_output = render_verified_tool_result(
             tool_id,
             tool_result,
@@ -347,7 +347,7 @@ async def chat_stream(
                 status="running",
             )
 
-            tool_id, tool_result = await run_agent_tool(agent)
+            tool_id, tool_result = await run_agent_tool(agent, request.message)
             verified_output = render_verified_tool_result(
                 tool_id,
                 tool_result,
