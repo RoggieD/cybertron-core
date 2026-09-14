@@ -1,23 +1,29 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from backend.app.events.bus import event_bus
+from backend.app.events.schema import CoreEvent
 
 router = APIRouter()
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    await websocket.accept()
+    await event_bus.connect(websocket)
+
+    connected_event = CoreEvent(
+        event_type="core.connected",
+        actor={
+            "type": "core",
+            "id": "cybertron",
+        },
+        status="online",
+        metadata={
+            "service": "CyberTron C.O.R.E.",
+        },
+    )
 
     await websocket.send_json(
-        {
-            "event_type": "core.connected",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "payload": {
-                "service": "CyberTron C.O.R.E.",
-                "status": "online",
-            },
-        }
+        connected_event.model_dump(mode="json")
     )
 
     try:
@@ -25,14 +31,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             message = await websocket.receive_text()
 
             await websocket.send_json(
-                {
-                    "event_type": "core.echo",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "payload": {
+                CoreEvent(
+                    event_type="core.echo",
+                    actor={
+                        "type": "client",
+                        "id": "browser",
+                    },
+                    target={
+                        "type": "core",
+                        "id": "cybertron",
+                    },
+                    status="complete",
+                    metadata={
                         "message": message,
                     },
-                }
+                ).model_dump(mode="json")
             )
 
     except WebSocketDisconnect:
-        return
+        await event_bus.disconnect(websocket)
