@@ -667,6 +667,63 @@ export default function App() {
               </code>
             </div>
 
+            {selectedService.scope === "docker" && (
+              <div className="service-drilldown-grid">
+                <div>
+                  <span>CONTAINER</span>
+                  <strong>
+                    {selectedService.container ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>IMAGE</span>
+                  <strong>
+                    {selectedService.image ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>CONTAINER STATE</span>
+                  <strong>
+                    {selectedService.container_status ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>CONTAINER HEALTH</span>
+                  <strong>
+                    {selectedService.container_health ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>INTERNAL PORT</span>
+                  <strong>
+                    {selectedService.container_port ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>HEALTH PATH</span>
+                  <strong>
+                    {selectedService.health_path ?? "/"}
+                  </strong>
+                </div>
+              </div>
+            )}
+
+            {selectedService.scope === "docker" &&
+              selectedService.networks &&
+              selectedService.networks.length > 0 && (
+                <div className="service-networks">
+                  <span>NETWORKS</span>
+                  <strong>
+                    {selectedService.networks.join(", ")}
+                  </strong>
+                </div>
+              )}
+
             <div className="service-last-check">
               <span>LAST MANUAL CHECK</span>
               <strong>

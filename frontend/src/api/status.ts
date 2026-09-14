@@ -38,10 +38,20 @@ export type ServiceHealthItem = {
   scope: string;
   reachable: boolean;
   target?: string | null;
+  target_configured?: string | null;
   status_code?: number | null;
   reason?: string | null;
   latency_ms?: number | null;
   error?: string | null;
+
+  container?: string | null;
+  container_port?: number | null;
+  protocol?: string | null;
+  health_path?: string | null;
+  image?: string | null;
+  container_status?: string | null;
+  container_health?: string | null;
+  networks?: string[];
 };
 
 export type ServiceHealthResponse = {
