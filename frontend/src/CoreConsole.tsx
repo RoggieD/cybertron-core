@@ -1,19 +1,12 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
 import App from "./App";
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
+import DashboardPage from "./pages/DashboardPage";
+import ProcessingPage from "./pages/ProcessingPage";
 import "./core-shell.css";
-
-const CognitionGraph = lazy(
-  () => import("./components/CognitionGraph"),
-);
 
 function pageFromPath(pathname: string): CorePage {
   if (pathname.startsWith("/processing")) return "processing";
@@ -69,32 +62,9 @@ export default function CoreConsole() {
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
 
-      {page === "processing" && (
-        <section className="core-processing-page">
-          <div className="core-processing-heading">
-            <span>LIVE ORCHESTRATION</span>
-            <h1>Processing Graph</h1>
-            <p>
-              Real-time cognition flow across routing, agents, memory,
-              tools, and the active model.
-            </p>
-          </div>
-
-          <div className="core-processing-graph">
-            <Suspense
-              fallback={
-                <div className="core-graph-loading">
-                  INITIALIZING COGNITION MAP…
-                </div>
-              }
-            >
-              <CognitionGraph />
-            </Suspense>
-          </div>
-        </section>
-      )}
-
-      <App />
+      {page === "dashboard" && <DashboardPage />}
+      {page === "processing" && <ProcessingPage />}
+      {page !== "dashboard" && page !== "processing" && <App />}
     </>
   );
 }
