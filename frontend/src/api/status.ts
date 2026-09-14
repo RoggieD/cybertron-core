@@ -74,32 +74,20 @@ export type ServiceHealthResponse = {
 };
 
 export async function getStatusOverview(): Promise<StatusOverview> {
-  const host = window.location.hostname;
-
-  const response = await fetch(
-    `http://${host}:8000/api/status/overview`
-  );
+  const response = await fetch("/api/status/overview");
 
   if (!response.ok) {
-    throw new Error(
-      `Status API returned ${response.status}`
-    );
+    throw new Error(`Status API returned ${response.status}`);
   }
 
   return response.json();
 }
 
 export async function getServiceStatus(): Promise<ServiceHealthResponse> {
-  const host = window.location.hostname;
-
-  const response = await fetch(
-    `http://${host}:8000/api/status/services`
-  );
+  const response = await fetch("/api/status/services");
 
   if (!response.ok) {
-    throw new Error(
-      `Service status API returned ${response.status}`
-    );
+    throw new Error(`Service status API returned ${response.status}`);
   }
 
   return response.json();
@@ -129,16 +117,10 @@ export type TelemetryHistoryResponse = {
 export async function getTelemetryHistory(
   limit = 240
 ): Promise<TelemetryHistoryResponse> {
-  const host = window.location.hostname;
-
-  const response = await fetch(
-    `http://${host}:8000/api/status/history?limit=${limit}`
-  );
+  const response = await fetch(`/api/status/history?limit=${limit}`);
 
   if (!response.ok) {
-    throw new Error(
-      `Telemetry history API returned ${response.status}`
-    );
+    throw new Error(`Telemetry history API returned ${response.status}`);
   }
 
   return response.json();
@@ -166,21 +148,14 @@ export type IncidentResponse = {
 export async function getIncidents(
   limit = 20
 ): Promise<IncidentResponse> {
-  const host = window.location.hostname;
-
-  const response = await fetch(
-    `http://${host}:8000/api/status/incidents?limit=${limit}`
-  );
+  const response = await fetch(`/api/status/incidents?limit=${limit}`);
 
   if (!response.ok) {
-    throw new Error(
-      `Incident API returned ${response.status}`
-    );
+    throw new Error(`Incident API returned ${response.status}`);
   }
 
   return response.json();
 }
-
 
 export async function acknowledgeIncident(
   incidentId: string
@@ -190,21 +165,15 @@ export async function acknowledgeIncident(
   reason?: string;
   incident_id: string;
 }> {
-  const host = window.location.hostname;
-
   const response = await fetch(
-    `http://${host}:8000/api/status/incidents/${encodeURIComponent(
-      incidentId
-    )}/acknowledge`,
+    `/api/status/incidents/${encodeURIComponent(incidentId)}/acknowledge`,
     {
       method: "POST"
     }
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Incident acknowledgment returned ${response.status}`
-    );
+    throw new Error(`Incident acknowledgment returned ${response.status}`);
   }
 
   return response.json();
@@ -228,18 +197,12 @@ export type IncidentTimeline = {
 export async function getIncidentTimeline(
   incidentId: string
 ): Promise<IncidentTimeline> {
-  const host = window.location.hostname;
-
   const response = await fetch(
-    `http://${host}:8000/api/status/incidents/${encodeURIComponent(
-      incidentId
-    )}`
+    `/api/status/incidents/${encodeURIComponent(incidentId)}`
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Incident timeline returned ${response.status}`
-    );
+    throw new Error(`Incident timeline returned ${response.status}`);
   }
 
   return response.json();
@@ -248,18 +211,12 @@ export async function getIncidentTimeline(
 export async function searchIncidents(
   query: string
 ): Promise<IncidentEvent[]> {
-  const host = window.location.hostname;
-
   const response = await fetch(
-    `http://${host}:8000/api/status/incidents/search?q=${encodeURIComponent(
-      query
-    )}&limit=200`
+    `/api/status/incidents/search?q=${encodeURIComponent(query)}&limit=200`
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Incident search returned ${response.status}`
-    );
+    throw new Error(`Incident search returned ${response.status}`);
   }
 
   const data = await response.json();
@@ -270,14 +227,9 @@ export async function searchIncidents(
 export function downloadIncidentCsv(
   query = ""
 ): void {
-  const host = window.location.hostname;
-
   window.location.href =
-    `http://${host}:8000/api/status/incidents/export?q=${encodeURIComponent(
-      query
-    )}`;
+    `/api/status/incidents/export?q=${encodeURIComponent(query)}`;
 }
-
 
 export type IncidentAnalytics = {
   total_events: number;
@@ -295,16 +247,10 @@ export type IncidentAnalytics = {
 };
 
 export async function getIncidentAnalytics(): Promise<IncidentAnalytics> {
-  const host = window.location.hostname;
-
-  const response = await fetch(
-    `http://${host}:8000/api/status/incidents/analytics`
-  );
+  const response = await fetch("/api/status/incidents/analytics");
 
   if (!response.ok) {
-    throw new Error(
-      `Incident analytics returned ${response.status}`
-    );
+    throw new Error(`Incident analytics returned ${response.status}`);
   }
 
   return response.json();
