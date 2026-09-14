@@ -208,6 +208,18 @@ def retrieve_memory_context(
             for memory in results
         }
     )
+    result_sources = sorted(
+        {
+            str(memory.get("source") or "unknown")
+            for memory in results
+        }
+    )
+    result_namespaces = sorted(
+        {
+            str(memory.get("namespace") or "unknown")
+            for memory in results
+        }
+    )
 
     _publish_memory_event(
         "memory.search_completed",
@@ -215,7 +227,10 @@ def retrieve_memory_context(
         metadata={
             "namespace": "core",
             "scope": ",".join(result_scopes) if result_scopes else "none",
+            "scopes": result_scopes,
             "kinds": result_kinds,
+            "sources": result_sources,
+            "namespaces": result_namespaces,
             "result_count": len(results),
         },
     )
