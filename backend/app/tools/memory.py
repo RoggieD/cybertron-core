@@ -39,6 +39,52 @@ def _memory_search(
 ) -> dict[str, Any]:
     scope = scope.strip().lower()
 
+    if scope == "all":
+        combined = []
+
+        for public_scope in (
+            "shared",
+            "system",
+        ):
+            result = _memory_search(
+                store=store,
+                policy=policy,
+                query=query,
+                namespace=namespace,
+                scope=public_scope,
+                kind=kind,
+                tags=tags,
+                limit=limit,
+            )
+
+            if result.get("allowed"):
+                combined.extend(
+                    result.get("memories")
+                    or []
+                )
+
+        combined.sort(
+            key=lambda item: item.get(
+                "updated_at",
+                "",
+            ),
+            reverse=True,
+        )
+
+        combined = combined[
+            :max(
+                1,
+                min(limit, 100),
+            )
+        ]
+
+        return {
+            "allowed": True,
+            "scope": "all",
+            "count": len(combined),
+            "memories": combined,
+        }
+
     if scope not in PUBLIC_AGENT_SCOPES:
         return {
             "allowed": False,

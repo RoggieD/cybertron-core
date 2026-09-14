@@ -28,6 +28,17 @@ def select_tool(
 ) -> tuple[str | None, dict]:
     normalized = message.lower()
 
+    memory_query = extract_memory_query(
+        message
+    )
+
+    if memory_query is not None:
+        return "memory.search", {
+            "query": memory_query,
+            "scope": "all",
+        }
+
+
     if agent.id == "system":
         overview_phrases = (
             "system overview",
@@ -430,5 +441,36 @@ def extract_incident_clock(
             int(match.group(1)),
             int(match.group(2)),
         )
+
+    return None
+
+def extract_memory_query(
+    message: str,
+) -> str | None:
+    text = message.strip()
+
+    patterns = (
+        r"^what do you remember about\s+(.+?)[?.!]*$",
+        r"^what do you know about\s+(.+?)[?.!]*$",
+        r"^search (?:your )?memory for\s+(.+?)[?.!]*$",
+        r"^find (?:anything )?(?:you )?remember about\s+(.+?)[?.!]*$",
+        r"^look in (?:your )?memory for\s+(.+?)[?.!]*$",
+        r"^recall\s+(.+?)[?.!]*$",
+    )
+
+    for pattern in patterns:
+        match = re.match(
+            pattern,
+            text,
+            re.IGNORECASE,
+        )
+
+        if match:
+            query = match.group(1).strip()
+
+            return (
+                query.rstrip("?.! ")
+                or None
+            )
 
     return None
