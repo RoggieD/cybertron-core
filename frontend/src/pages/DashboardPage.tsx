@@ -91,6 +91,50 @@ function cleanSpeechText(text: string): string {
     .trim();
 }
 
+function selectSpeechText(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  const preferredSections = ["ANALYSIS", "SUMMARY", "ANSWER"];
+
+  for (const section of preferredSections) {
+    const heading = new RegExp(
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*)?${section}\\s*:?\\s*\\n`,
+      "i",
+    );
+    const match = heading.exec(normalized);
+
+    if (match) {
+      const start = match.index + match[0].length;
+      const remainder = normalized.slice(start);
+      const nextHeading = remainder.search(
+        /\n\s*(?:#{1,6}\s*)?[A-Z][A-Z0-9 _/&-]{2,}\s*:?\s*\n/,
+      );
+      const sectionText = (
+        nextHeading >= 0 ? remainder.slice(0, nextHeading) : remainder
+      ).trim();
+
+      if (sectionText) return cleanSpeechText(sectionText);
+    }
+  }
+
+  const cleaned = cleanSpeechText(normalized);
+  if (cleaned.length <= 650) return cleaned;
+
+  const sentences = cleaned.match(/[^.!?]+[.!?]+/g) ?? [];
+  let summary = "";
+
+  for (const sentence of sentences) {
+    const candidate = `${summary} ${sentence.trim()}`.trim();
+    if (candidate.length > 525 && summary) break;
+    summary = candidate;
+    if (summary.length >= 350) break;
+  }
+
+  if (summary) return summary;
+
+  const clipped = cleaned.slice(0, 525).replace(/\s+\S*$/, "").trim();
+  return clipped ? `${clipped}…` : cleaned;
+}
+
 export default function DashboardPage() {
   const [apiStatus, setApiStatus] = useState("CHECKING");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -246,7 +290,7 @@ export default function DashboardPage() {
   }
 
   async function speak(text: string) {
-    const speechText = cleanSpeechText(text);
+    const speechText = selectSpeechText(text);
     if (!voiceEnabled || !speechText || voiceState === "OFFLINE") return;
 
     try {
