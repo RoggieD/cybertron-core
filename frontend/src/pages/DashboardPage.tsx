@@ -143,6 +143,20 @@ function selectSpeechText(text: string): string {
   return clipped ? `${clipped}…` : cleaned;
 }
 
+function hasVerifiedToolHeader(text: string): boolean {
+  const opening = text.trimStart().slice(0, 180).toUpperCase();
+  if (!opening.includes("VERIFIED")) return false;
+
+  return [
+    "SYSTEM STATUS",
+    "SYSTEM OVERVIEW",
+    "SECURITY",
+    "INCIDENT",
+    "SERVICE",
+    "MEMORY",
+  ].some((heading) => opening.includes(heading));
+}
+
 export default function DashboardPage() {
   const [apiStatus, setApiStatus] = useState("CHECKING");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -322,7 +336,9 @@ export default function DashboardPage() {
   }
 
   async function speak(text: string) {
-    const speechText = selectSpeechText(text);
+    // Preserve the verified heading until the tool-aware speech formatter has
+    // classified the result. Generic model replies still use concise sections.
+    const speechText = hasVerifiedToolHeader(text) ? text : selectSpeechText(text);
     if (!voiceEnabled || !speechText || voiceState === "OFFLINE") return;
 
     try {
