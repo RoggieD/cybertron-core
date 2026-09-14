@@ -13,6 +13,7 @@ type ReactorState =
   | "IDLE"
   | "ROUTING"
   | "AGENT_ACTIVE"
+  | "TOOL_ACTIVE"
   | "THINKING"
   | "COMPLETE"
   | "ERROR";
@@ -29,6 +30,7 @@ export default function App() {
 
   const [activeModel, setActiveModel] = useState("UNKNOWN");
   const [activeAgent, setActiveAgent] = useState("NONE");
+  const [activeTool, setActiveTool] = useState("NONE");
 
   const [evalCount, setEvalCount] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
@@ -74,6 +76,21 @@ export default function App() {
           }
 
           case "agent.started":
+            setReactorState("AGENT_ACTIVE");
+            break;
+
+          case "tool.started": {
+            const toolId = event.target?.id;
+
+            if (typeof toolId === "string") {
+              setActiveTool(toolId);
+            }
+
+            setReactorState("TOOL_ACTIVE");
+            break;
+          }
+
+          case "tool.completed":
             setReactorState("AGENT_ACTIVE");
             break;
 
@@ -123,6 +140,7 @@ export default function App() {
     setTraceId(null);
     setTraceEventCount(0);
     setActiveAgent("ROUTING...");
+    setActiveTool("NONE");
     setReactorState("ROUTING");
 
     try {
@@ -149,6 +167,9 @@ export default function App() {
             streamEvent.content
           ) {
             setResponseText(streamEvent.content);
+            setActiveModel("NOT USED");
+            setEvalCount(null);
+            setDurationMs(null);
           }
 
           if (
@@ -202,6 +223,7 @@ export default function App() {
   const busy =
     reactorState === "ROUTING" ||
     reactorState === "AGENT_ACTIVE" ||
+    reactorState === "TOOL_ACTIVE" ||
     reactorState === "THINKING";
 
   return (
@@ -290,6 +312,11 @@ export default function App() {
         <article>
           <span>ACTIVE AGENT</span>
           <strong>{activeAgent}</strong>
+        </article>
+
+        <article>
+          <span>ACTIVE TOOL</span>
+          <strong>{activeTool}</strong>
         </article>
 
         <article>

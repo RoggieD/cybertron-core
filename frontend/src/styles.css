@@ -397,3 +397,38 @@ footer {
       0 0 140px rgba(95, 245, 255, 0.88);
   }
 }
+
+.reactor-tool_active .reactor-core {
+  animation:
+    pulse 0.55s ease-in-out infinite,
+    tool-glow 0.9s ease-in-out infinite;
+}
+
+.reactor-tool_active .ring-one {
+  animation: rotate 1.6s linear infinite;
+}
+
+.reactor-tool_active .ring-two {
+  animation: rotate-reverse 2.1s linear infinite;
+}
+
+.reactor-tool_active .ring-three {
+  animation: rotate 3s linear infinite;
+}
+
+@keyframes tool-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 14px #7ff7ff,
+      0 0 42px #16cbe0,
+      0 0 80px rgba(22, 203, 224, 0.55);
+  }
+
+  50% {
+    box-shadow:
+      0 0 34px #ffffff,
+      0 0 100px #5ff5ff,
+      0 0 180px rgba(95, 245, 255, 0.95);
+  }
+}
