@@ -38,6 +38,8 @@ def select_tool(
             "scope": "all",
         }
 
+    if agent.id == "security":
+        return "security.snapshot", {}
 
     if agent.id == "system":
         overview_phrases = (
@@ -371,6 +373,7 @@ def extract_url(message: str) -> str | None:
 
     return match.group(0).rstrip(".,);]}")
 
+
 def extract_incident_hours(
     message: str,
 ) -> int | None:
@@ -396,14 +399,12 @@ def extract_incident_hours(
 
     return None
 
+
 def extract_incident_clock(
     message: str,
 ) -> tuple[int, int] | None:
     normalized = message.lower()
 
-    # 12-hour form:
-    # since 1 am
-    # since 1:30 PM
     match = re.search(
         r"\bsince\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b",
         normalized,
@@ -428,8 +429,6 @@ def extract_incident_clock(
 
         return hour, minute
 
-    # 24-hour form:
-    # since 14:30
     match = re.search(
         r"\bsince\s+([01]?\d|2[0-3]):([0-5]\d)\b",
         normalized,
@@ -443,6 +442,7 @@ def extract_incident_clock(
         )
 
     return None
+
 
 def extract_memory_query(
     message: str,
