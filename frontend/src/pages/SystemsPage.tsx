@@ -248,7 +248,7 @@ export default function SystemsPage() {
           </div>
         </div>
 
-        <div className="telemetry-grid">
+        <div className="telemetry-grid" style={{ gridTemplateColumns: "repeat(8, minmax(100px, 1fr))" }}>
           <article className="telemetry-card">
             <span>CPU</span>
             <strong>{overview ? `${overview.system.cpu.usage_percent}%` : "--"}</strong>
@@ -259,6 +259,23 @@ export default function SystemsPage() {
             <span>MEMORY</span>
             <strong>{overview ? `${overview.system.memory.usage_percent}%` : "--"}</strong>
             <div className="meter"><div style={{ width: `${overview?.system.memory.usage_percent ?? 0}%` }} /></div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>VRAM</span>
+            <strong>
+              {currentGpu?.available && typeof currentGpu.memory_usage_percent === "number"
+                ? `${currentGpu.memory_usage_percent}%`
+                : "N/A"}
+            </strong>
+            <div className="meter">
+              <div style={{ width: `${currentGpu?.memory_usage_percent ?? 0}%` }} />
+            </div>
+            <small>
+              {currentGpu?.available
+                ? `${formatGb(currentGpu.memory_used_mb)} / ${formatGb(currentGpu.memory_total_mb)} GB`
+                : "GPU UNAVAILABLE"}
+            </small>
           </article>
 
           <article className="telemetry-card">
