@@ -118,6 +118,14 @@ class TraceStore:
                 event,
             )
 
+    @staticmethod
+    def _row_to_event(row: sqlite3.Row) -> dict:
+        event = dict(row)
+        event["actor"] = json.loads(event.pop("actor_json") or "null")
+        event["target"] = json.loads(event.pop("target_json") or "null")
+        event["metadata"] = json.loads(event.pop("metadata_json") or "{}")
+        return event
+
     def _recent_sync(
         self,
         limit: int,
@@ -133,7 +141,7 @@ class TraceStore:
                 (limit,),
             ).fetchall()
 
-        return [dict(row) for row in rows]
+        return [self._row_to_event(row) for row in rows]
 
     async def recent(
         self,
@@ -141,6 +149,73 @@ class TraceStore:
     ) -> list[dict]:
         return await asyncio.to_thread(
             self._recent_sync,
+            limit,
+        )
+
+    def _by_trace_sync(
+        self,
+        trace_id: str,
+        limit: int,
+    ) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM trace_events
+                WHERE trace_id = ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (trace_id, limit),
+            ).fetchall()
+
+        return [self._row_to_event(row) for row in rows]
+
+    async def by_trace(
+        self,
+        trace_id: str,
+        limit: int = 1000,
+    ) -> list[dict]:
+        return await asyncio.to_thread(
+            self._by_trace_sync,
+            trace_id,
+            limit,
+        )
+
+    def _recent_trace_summaries_sync(
+        self,
+        limit: int,
+    ) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    trace_id,
+                    MIN(timestamp) AS started_at,
+                    MAX(timestamp) AS ended_at,
+                    COUNT(*) AS event_count,
+                    MAX(CASE WHEN event_type = 'response.generated' THEN 1 ELSE 0 END)
+                        AS completed,
+                    MAX(CASE WHEN event_type = 'model.error' THEN 1 ELSE 0 END)
+                        AS errored
+                FROM trace_events
+                WHERE trace_id IS NOT NULL
+                  AND trace_id != ''
+                GROUP BY trace_id
+                ORDER BY MAX(timestamp) DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def recent_trace_summaries(
+        self,
+        limit: int = 25,
+    ) -> list[dict]:
+        return await asyncio.to_thread(
+            self._recent_trace_summaries_sync,
             limit,
         )
 
