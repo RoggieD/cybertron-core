@@ -30,7 +30,6 @@ def extract_user_message(payload):
     return None
 
 
-
 def extract_agent_id(payload):
     if not isinstance(payload, dict):
         return "general"
@@ -98,8 +97,9 @@ class ConversationMemoryMiddleware:
                     "more_body": False,
                 }
 
-            return {
-                "type": "http.disconnect",
-            }
+            # StreamingResponse keeps listening for a real client disconnect.
+            # Do not synthesize http.disconnect here: doing so cancels the
+            # response body iterator immediately after the request is replayed.
+            return await receive()
 
         await self.app(scope, replay, send)
