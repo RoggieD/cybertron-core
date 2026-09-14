@@ -1,0 +1,130 @@
+.core-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 22px;
+  border-bottom: 1px solid rgba(83, 230, 255, 0.16);
+  background: rgba(1, 7, 10, 0.9);
+  backdrop-filter: blur(14px);
+}
+
+.core-navigation-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  letter-spacing: 0.15em;
+}
+
+.core-navigation-brand span {
+  font-size: 0.62rem;
+  opacity: 0.5;
+}
+
+.core-navigation-brand strong {
+  font-size: 0.8rem;
+}
+
+.core-navigation-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.core-navigation-links button {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  opacity: 0.62;
+}
+
+.core-navigation-links button:hover,
+.core-navigation-links button.active {
+  opacity: 1;
+  border-color: rgba(83, 230, 255, 0.28);
+  background: rgba(83, 230, 255, 0.05);
+  box-shadow: inset 0 -2px 0 rgba(83, 230, 255, 0.5);
+}
+
+.core-dashboard-graph {
+  width: min(1180px, calc(100% - 32px));
+  margin: 22px auto 0;
+}
+
+body[data-core-page="dashboard"] .telemetry-panel,
+body[data-core-page="dashboard"] .trend-panel,
+body[data-core-page="dashboard"] .service-health-panel,
+body[data-core-page="dashboard"] .incident-analytics-panel,
+body[data-core-page="dashboard"] .incident-panel,
+body[data-core-page="dashboard"] .memory-approval-panel {
+  display: none;
+}
+
+body[data-core-page="systems"] .reactor-panel,
+body[data-core-page="systems"] .conversation-panel,
+body[data-core-page="systems"] .service-health-panel,
+body[data-core-page="systems"] .incident-analytics-panel,
+body[data-core-page="systems"] .incident-panel,
+body[data-core-page="systems"] .memory-approval-panel {
+  display: none;
+}
+
+body[data-core-page="services"] .reactor-panel,
+body[data-core-page="services"] .conversation-panel,
+body[data-core-page="services"] .telemetry-panel,
+body[data-core-page="services"] .trend-panel,
+body[data-core-page="services"] .incident-analytics-panel,
+body[data-core-page="services"] .incident-panel,
+body[data-core-page="services"] .memory-approval-panel {
+  display: none;
+}
+
+body[data-core-page="incidents"] .reactor-panel,
+body[data-core-page="incidents"] .conversation-panel,
+body[data-core-page="incidents"] .telemetry-panel,
+body[data-core-page="incidents"] .trend-panel,
+body[data-core-page="incidents"] .service-health-panel,
+body[data-core-page="incidents"] .memory-approval-panel {
+  display: none;
+}
+
+body[data-core-page="memory"] .reactor-panel,
+body[data-core-page="memory"] .conversation-panel,
+body[data-core-page="memory"] .telemetry-panel,
+body[data-core-page="memory"] .trend-panel,
+body[data-core-page="memory"] .service-health-panel,
+body[data-core-page="memory"] .incident-analytics-panel,
+body[data-core-page="memory"] .incident-panel,
+body[data-core-page="memory"] .status-grid,
+body[data-core-page="memory"] footer {
+  display: none;
+}
+
+body:not([data-core-page="dashboard"]) .core-shell {
+  padding-top: 28px;
+}
+
+body:not([data-core-page="dashboard"]) .header {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 760px) {
+  .core-navigation {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .core-navigation-links {
+    width: 100%;
+  }
+}
