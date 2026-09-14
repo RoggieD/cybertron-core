@@ -1,5 +1,6 @@
 type CorePage =
   | "dashboard"
+  | "processing"
   | "systems"
   | "services"
   | "incidents"
@@ -13,6 +14,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "DASHBOARD", path: "/" },
+  { id: "processing", label: "PROCESSING", path: "/processing" },
   { id: "systems", label: "SYSTEMS", path: "/systems" },
   { id: "services", label: "SERVICES", path: "/services" },
   { id: "incidents", label: "INCIDENTS", path: "/incidents" },
