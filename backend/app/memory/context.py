@@ -234,14 +234,21 @@ def format_memory_context(
         return ""
 
     lines = [
-        "VERIFIED PERSISTENT MEMORY:",
+        "VERIFIED PERSISTENT MEMORY — CONTEXT RETRIEVAL",
+        f"Context records retrieved: {len(memories)}",
         (
-            "The following records were retrieved "
-            "from policy-authorized persistent memory."
+            "The following records were retrieved from policy-authorized "
+            "persistent memory for this conversation."
         ),
         (
-            "Treat them as stored context, not as "
-            "live system measurements."
+            "Treat them as verified stored context, not as live system "
+            "measurements."
+        ),
+        (
+            "IMPORTANT: If a separate memory.search tool invocation returns "
+            "zero matches, that means only that specific tool query found no "
+            "additional matches. It does NOT negate these retrieved context "
+            "records and does NOT mean persistent memory is empty."
         ),
     ]
 
@@ -250,8 +257,8 @@ def format_memory_context(
             "- "
             f"[{memory['kind']}] "
             f"{memory['content']} "
-            f"(source: "
-            f"{memory.get('source') or 'unknown'})"
+            f"(scope: {memory.get('scope') or 'unknown'}; "
+            f"source: {memory.get('source') or 'unknown'})"
         )
 
     return "\n".join(lines)
