@@ -22,6 +22,25 @@ SYSTEM_KEYWORDS = {
     "machine",
 }
 
+SECURITY_KEYWORDS = {
+    "security",
+    "secure",
+    "defensive",
+    "defense",
+    "attack surface",
+    "exposure",
+    "exposed services",
+    "risk posture",
+    "security posture",
+    "security snapshot",
+    "security check",
+    "security scan",
+    "hardening",
+    "suspicious",
+    "threat",
+    "threats",
+}
+
 INFRASTRUCTURE_KEYWORDS = {
     "docker",
     "container",
@@ -74,13 +93,9 @@ def _matches_keyword(
     normalized: str,
     keyword: str,
 ) -> bool:
-    # Phrases, URLs, and punctuation-bearing aliases are
-    # intentionally matched as substrings.
     if not keyword.isalnum():
         return keyword in normalized
 
-    # Single words must match whole words so, for example,
-    # "port" does not accidentally match "report".
     return (
         re.search(
             rf"\b{re.escape(keyword)}\b",
@@ -107,6 +122,12 @@ def route_agent(message: str) -> AgentDefinition:
         for phrase in overview_phrases
     ):
         return get_agent("system")
+
+    if any(
+        _matches_keyword(normalized, keyword)
+        for keyword in SECURITY_KEYWORDS
+    ):
+        return get_agent("security")
 
     if any(
         _matches_keyword(normalized, keyword)
