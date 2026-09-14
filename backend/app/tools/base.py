@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 
-ToolHandler = Callable[[], Awaitable[dict]]
+ToolHandler = Callable[..., Awaitable[dict]]
 
 
 @dataclass(frozen=True)

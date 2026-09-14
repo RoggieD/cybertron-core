@@ -3,6 +3,7 @@ from backend.app.tools.docker import docker_inventory
 from backend.app.tools.system import system_snapshot
 from backend.app.tools.processes import process_inventory
 from backend.app.tools.network import network_interfaces
+from backend.app.tools.listeners import listener_inventory, port_owner
 
 
 TOOLS = {
@@ -24,6 +25,27 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=process_inventory,
+    ),
+    "network.port_owner": ToolDefinition(
+        id="network.port_owner",
+        name="Port Owner",
+        description=(
+            "Read-only lookup of listeners bound to a specific TCP/IP port."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=port_owner,
+    ),
+    "network.listeners": ToolDefinition(
+        id="network.listeners",
+        name="Network Listeners",
+        description=(
+            "Read-only inventory of listening TCP/IP sockets "
+            "and owning processes."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=listener_inventory,
     ),
     "network.interfaces": ToolDefinition(
         id="network.interfaces",
@@ -50,7 +72,10 @@ def get_tool(tool_id: str) -> ToolDefinition:
     return TOOLS[tool_id]
 
 
-async def execute_tool(tool_id: str) -> dict:
+async def execute_tool(
+    tool_id: str,
+    **kwargs,
+) -> dict:
     tool = get_tool(tool_id)
 
     if tool.permission_level > 1:
@@ -58,4 +83,4 @@ async def execute_tool(tool_id: str) -> dict:
             f"Tool {tool.id} requires authorization."
         )
 
-    return await tool.handler()
+    return await tool.handler(**kwargs)

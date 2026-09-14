@@ -202,6 +202,12 @@ def render_verified_tool_result(
     if tool_id == "network.interfaces":
         return render_network_interfaces(result)
 
+    if tool_id == "network.listeners":
+        return render_network_listeners(result)
+
+    if tool_id == "network.port_owner":
+        return render_port_owner(result)
+
     return None
 
 
@@ -277,6 +283,23 @@ def should_return_verified_only(
     if tool_id == "network.interfaces":
         return normalized in network_requests
 
+    listener_requests = {
+        "show listening ports",
+        "show listening ports.",
+        "show open ports",
+        "show open ports.",
+        "show network listeners",
+        "show network listeners.",
+        "what services are listening",
+        "what services are listening.",
+    }
+
+    if tool_id == "network.listeners":
+        return normalized in listener_requests
+
+    if tool_id == "network.port_owner":
+        return True
+
     return False
 
 
@@ -329,5 +352,87 @@ def render_network_interfaces(result: dict) -> str:
                 f"{address.get('address')} | "
                 f"netmask {address.get('netmask')}"
             )
+
+    return "\n".join(lines)
+
+
+def render_network_listeners(result: dict) -> str:
+    listeners = result.get("listeners", [])
+
+    lines = [
+        "NETWORK LISTENERS — VERIFIED",
+        "",
+        f"Listening sockets: {len(listeners)}",
+        "",
+        "Address | Port | PID | Process",
+    ]
+
+    for listener in listeners:
+        lines.append(
+            f"{listener.get('address', 'unknown')} | "
+            f"{listener.get('port', 'unknown')} | "
+            f"{listener.get('pid') or '-'} | "
+            f"{listener.get('process') or 'unknown'}"
+        )
+
+    return "\n".join(lines)
+
+
+def render_port_owner(result: dict) -> str:
+    port = result.get("port")
+    matches = result.get("matches", [])
+
+    lines = [
+        f"PORT {port} — VERIFIED",
+        "",
+        f"Listening: {'yes' if result.get('listening') else 'no'}",
+        f"Bindings found: {result.get('count', len(matches))}",
+    ]
+
+    if not matches:
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "",
+            "Bindings:",
+        ]
+    )
+
+    for match in matches:
+        address = match.get("address", "unknown")
+        pid = match.get("pid")
+        process = match.get("process")
+
+        display_address = (
+            f"[{address}]"
+            if ":" in str(address)
+            else str(address)
+        )
+
+        lines.append(
+            f"- {display_address}:{port} | "
+            f"PID: {pid if pid is not None else 'unresolved'} | "
+            f"Process: {process or 'unresolved'}"
+        )
+
+    unresolved = any(
+        match.get("pid") is None
+        or not match.get("process")
+        for match in matches
+    )
+
+    if unresolved:
+        lines.extend(
+            [
+                "",
+                "Note:",
+                (
+                    "The listener is confirmed, but one or more owning "
+                    "processes could not be resolved with the current "
+                    "unprivileged inspection level."
+                ),
+            ]
+        )
 
     return "\n".join(lines)
