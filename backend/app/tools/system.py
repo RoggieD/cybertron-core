@@ -6,6 +6,21 @@ import time
 import psutil
 
 
+def _empty_gpu_snapshot() -> dict:
+    return {
+        "available": False,
+        "name": None,
+        "usage_percent": None,
+        "memory_used_mb": None,
+        "memory_total_mb": None,
+        "memory_usage_percent": None,
+        "temperature_c": None,
+        "power_draw_watts": None,
+        "power_limit_watts": None,
+        "power_usage_percent": None,
+    }
+
+
 def _gpu_snapshot() -> dict:
     """Read NVIDIA GPU telemetry without making it a hard dependency.
 
@@ -14,7 +29,7 @@ def _gpu_snapshot() -> dict:
     """
     command = [
         "nvidia-smi",
-        "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+        "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit",
         "--format=csv,noheader,nounits",
     ]
 
@@ -27,31 +42,15 @@ def _gpu_snapshot() -> dict:
             check=True,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
-        return {
-            "available": False,
-            "name": None,
-            "usage_percent": None,
-            "memory_used_mb": None,
-            "memory_total_mb": None,
-            "memory_usage_percent": None,
-            "temperature_c": None,
-        }
+        return _empty_gpu_snapshot()
 
     line = next(
         (item.strip() for item in result.stdout.splitlines() if item.strip()),
         "",
     )
     parts = [part.strip() for part in line.split(",")]
-    if len(parts) < 5:
-        return {
-            "available": False,
-            "name": None,
-            "usage_percent": None,
-            "memory_used_mb": None,
-            "memory_total_mb": None,
-            "memory_usage_percent": None,
-            "temperature_c": None,
-        }
+    if len(parts) < 7:
+        return _empty_gpu_snapshot()
 
     try:
         name = parts[0]
@@ -59,21 +58,20 @@ def _gpu_snapshot() -> dict:
         memory_used_mb = float(parts[2])
         memory_total_mb = float(parts[3])
         temperature_c = float(parts[4])
+        power_draw_watts = float(parts[5])
+        power_limit_watts = float(parts[6])
         memory_usage_percent = (
             (memory_used_mb / memory_total_mb) * 100.0
             if memory_total_mb > 0
             else 0.0
         )
+        power_usage_percent = (
+            (power_draw_watts / power_limit_watts) * 100.0
+            if power_limit_watts > 0
+            else 0.0
+        )
     except ValueError:
-        return {
-            "available": False,
-            "name": None,
-            "usage_percent": None,
-            "memory_used_mb": None,
-            "memory_total_mb": None,
-            "memory_usage_percent": None,
-            "temperature_c": None,
-        }
+        return _empty_gpu_snapshot()
 
     return {
         "available": True,
@@ -83,6 +81,9 @@ def _gpu_snapshot() -> dict:
         "memory_total_mb": round(memory_total_mb, 1),
         "memory_usage_percent": round(memory_usage_percent, 1),
         "temperature_c": round(temperature_c, 1),
+        "power_draw_watts": round(power_draw_watts, 1),
+        "power_limit_watts": round(power_limit_watts, 1),
+        "power_usage_percent": round(power_usage_percent, 1),
     }
 
 
