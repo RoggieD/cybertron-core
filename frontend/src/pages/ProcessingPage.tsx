@@ -23,8 +23,54 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-function targetId(event: CoreEvent): string | null {
-  return stringValue(event.target?.id);
+function entityId(
+  event: CoreEvent,
+  type: "agent" | "tool" | "model" | "memory",
+): string | null {
+  if (event.target?.type === type) {
+    const value = stringValue(event.target.id);
+    if (value) return value;
+  }
+
+  if (event.actor?.type === type) {
+    const value = stringValue(event.actor.id);
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function agentLabel(event: CoreEvent): string | null {
+  return (
+    stringValue(event.metadata?.agent_name) ??
+    entityId(event, "agent")
+  );
+}
+
+function modelLabel(event: CoreEvent): string | null {
+  return (
+    stringValue(event.metadata?.model) ??
+    stringValue(event.metadata?.model_name) ??
+    entityId(event, "model")
+  );
+}
+
+function toolLabel(event: CoreEvent): string | null {
+  return entityId(event, "tool");
+}
+
+function memoryLabel(event: CoreEvent): string {
+  const scope = stringValue(event.metadata?.scope);
+  const namespace = stringValue(event.metadata?.namespace);
+  const kind = stringValue(event.metadata?.kind);
+  const target = entityId(event, "memory");
+  const detail = [scope, namespace, kind].filter(Boolean).join(" / ");
+
+  return (
+    detail ||
+    target ||
+    event.event_type.replace("memory.", "").replaceAll("_", " ").toUpperCase()
+  );
 }
 
 function stageForEvent(eventType: string): ProcessingStage {
@@ -41,9 +87,59 @@ function stageForEvent(eventType: string): ProcessingStage {
   return "IDLE";
 }
 
-function eventLabel(event: CoreEvent): string {
-  const target = targetId(event);
-  return target ? `${event.event_type} · ${target}` : event.event_type;
+function describeEvent(event: CoreEvent): string {
+  const agent = agentLabel(event);
+  const tool = toolLabel(event);
+  const model = modelLabel(event);
+
+  switch (event.event_type) {
+    case "prompt.received":
+      return "Prompt accepted by C.O.R.E.";
+    case "router.started":
+      return "Routing request to the best agent";
+    case "agent.selected":
+      return `Agent selected${agent ? `: ${agent}` : ""}`;
+    case "agent.started":
+      return `Agent active${agent ? `: ${agent}` : ""}`;
+    case "agent.completed":
+      return `Agent completed${agent ? `: ${agent}` : ""}`;
+    case "tool.started":
+      return `Tool execution started${tool ? `: ${tool}` : ""}`;
+    case "tool.completed":
+      return `Tool execution completed${tool ? `: ${tool}` : ""}`;
+    case "model.request_started":
+      return `Model inference started${model ? `: ${model}` : ""}`;
+    case "model.token":
+      return `Streaming response${model ? ` from ${model}` : ""}`;
+    case "model.request_completed":
+      return `Model inference completed${model ? `: ${model}` : ""}`;
+    case "response.generated":
+      return "Response delivered to user";
+    case "model.error": {
+      const error = stringValue(event.metadata?.error);
+      return error ? `Model error: ${error}` : "Model inference error";
+    }
+    default:
+      if (event.event_type.startsWith("memory.")) {
+        const action = event.event_type
+          .replace("memory.", "")
+          .replaceAll("_", " ");
+        return `Memory ${action}: ${memoryLabel(event)}`;
+      }
+
+      return event.event_type.replaceAll(".", " › ").replaceAll("_", " ");
+  }
+}
+
+function appendTrail(current: CoreEvent[], event: CoreEvent): CoreEvent[] {
+  if (
+    event.event_type === "model.token" &&
+    current[current.length - 1]?.event_type === "model.token"
+  ) {
+    return [...current.slice(0, -1), event].slice(-10);
+  }
+
+  return [...current, event].slice(-10);
 }
 
 export default function ProcessingPage() {
@@ -72,36 +168,28 @@ export default function ProcessingPage() {
           setActiveTool("NONE");
           setMemoryAction("IDLE");
         } else {
-          setEventTrail((current) => [...current, event].slice(-10));
+          setEventTrail((current) => appendTrail(current, event));
           setEventCount((count) => count + 1);
           if (event.trace_id) setTraceId(event.trace_id);
         }
 
-        if (event.event_type === "agent.selected") {
-          setActiveAgent(
-            stringValue(event.metadata?.agent_name) ??
-              targetId(event) ??
-              "ACTIVE",
-          );
+        const agent = agentLabel(event);
+        if (agent && event.event_type.startsWith("agent.")) {
+          setActiveAgent(agent);
         }
 
-        if (event.event_type.startsWith("tool.")) {
-          setActiveTool(targetId(event) ?? event.event_type.replace("tool.", ""));
+        const tool = toolLabel(event);
+        if (tool && event.event_type.startsWith("tool.")) {
+          setActiveTool(tool);
         }
 
-        if (event.event_type.startsWith("model.")) {
-          setActiveModel(
-            stringValue(event.metadata?.model) ??
-              stringValue(event.metadata?.model_name) ??
-              targetId(event) ??
-              "ACTIVE",
-          );
+        const model = modelLabel(event);
+        if (model && event.event_type.startsWith("model.")) {
+          setActiveModel(model);
         }
 
         if (event.event_type.startsWith("memory.")) {
-          setMemoryAction(
-            targetId(event) ?? event.event_type.replace("memory.", "").toUpperCase(),
-          );
+          setMemoryAction(memoryLabel(event));
         }
 
         if (event.event_type === "response.generated") {
@@ -117,6 +205,11 @@ export default function ProcessingPage() {
   const traceShort = useMemo(
     () => (traceId ? traceId.slice(0, 12) : "—"),
     [traceId],
+  );
+
+  const currentOperation = useMemo(
+    () => (lastEvent ? describeEvent(lastEvent) : "Awaiting orchestration activity"),
+    [lastEvent],
   );
 
   return (
@@ -143,28 +236,34 @@ export default function ProcessingPage() {
         </article>
         <article>
           <span>ACTIVE AGENT</span>
-          <strong>{activeAgent}</strong>
+          <strong title={activeAgent}>{activeAgent}</strong>
         </article>
         <article>
           <span>ACTIVE TOOL</span>
-          <strong>{activeTool}</strong>
+          <strong title={activeTool}>{activeTool}</strong>
         </article>
         <article>
           <span>MEMORY</span>
-          <strong>{memoryAction}</strong>
+          <strong title={memoryAction}>{memoryAction}</strong>
         </article>
         <article>
           <span>ACTIVE MODEL</span>
-          <strong>{activeModel}</strong>
+          <strong title={activeModel}>{activeModel}</strong>
         </article>
         <article>
           <span>TRACE ID</span>
-          <strong className="trace-id">{traceShort}</strong>
+          <strong className="trace-id" title={traceId ?? undefined}>{traceShort}</strong>
         </article>
         <article>
           <span>TRACE EVENTS</span>
           <strong>{eventCount}</strong>
         </article>
+      </div>
+
+      <div className={`processing-operation processing-operation-${stage.toLowerCase()}`}>
+        <span>NOW PROCESSING</span>
+        <strong>{currentOperation}</strong>
+        <small>{lastEvent?.event_type ?? "core.idle"}</small>
       </div>
 
       <div className="core-processing-layout">
@@ -194,9 +293,9 @@ export default function ProcessingPage() {
             ) : (
               [...eventTrail].reverse().map((event) => (
                 <div className="processing-event-item" key={event.event_id}>
-                  <span>{eventLabel(event)}</span>
+                  <span>{describeEvent(event)}</span>
                   <small>
-                    {new Date(event.timestamp).toLocaleTimeString()}
+                    {event.event_type} · {new Date(event.timestamp).toLocaleTimeString()}
                   </small>
                 </div>
               ))
