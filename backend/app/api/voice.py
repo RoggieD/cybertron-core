@@ -217,6 +217,8 @@ async def stt_status() -> dict:
         "provider": "faster-whisper",
         "base_url": base_url,
         "model": settings.whisper_model,
+        "language": settings.whisper_language,
+        "prompt_configured": bool(settings.whisper_prompt.strip()),
         "authenticated": authenticated,
         "reachable": reachable,
     }
@@ -243,7 +245,11 @@ async def transcribe_audio(file: UploadFile = File(...)) -> dict:
             file.content_type or "application/octet-stream",
         )
     }
-    data = {"model": settings.whisper_model}
+    data = {
+        "model": settings.whisper_model,
+        "language": settings.whisper_language,
+        "prompt": settings.whisper_prompt,
+    }
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -268,7 +274,11 @@ async def transcribe_audio(file: UploadFile = File(...)) -> dict:
 
     payload = response.json()
     text = str(payload.get("text", "")).strip()
-    return {"text": text, "provider": "faster-whisper", "model": settings.whisper_model}
+    return {
+        "text": text,
+        "provider": "faster-whisper",
+        "model": settings.whisper_model,
+    }
 
 
 @router.post("/speech")
