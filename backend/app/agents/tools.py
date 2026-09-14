@@ -42,6 +42,19 @@ def select_tool(
         return "system.snapshot", {}
 
     if agent.id == "infrastructure":
+        if any(
+            phrase in normalized
+            for phrase in (
+                "service status",
+                "services are up",
+                "services up",
+                "health summary",
+                "service health",
+                "system health summary",
+            )
+        ):
+            return "service.status", {}
+
         container_name = extract_container_name(
             message
         )

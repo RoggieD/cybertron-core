@@ -1,3 +1,4 @@
+from backend.app.tools.services import service_status
 from backend.app.tools.reachability import network_reachability
 from backend.app.tools.base import ToolDefinition
 from backend.app.tools.docker import docker_inventory, docker_inspect
@@ -36,6 +37,16 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=port_owner,
+    ),
+    "service.status": ToolDefinition(
+        id="service.status",
+        name="Service Status",
+        description=(
+            "Read-only health summary of known services."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=service_status,
     ),
     "network.reachability": ToolDefinition(
         id="network.reachability",

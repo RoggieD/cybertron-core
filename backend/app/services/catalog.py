@@ -1,25 +1,30 @@
 SERVICES = {
     "ollama": {
         "name": "Ollama",
+        "scope": "host",
         "target": "http://localhost:11434",
     },
 
     "open webui": {
         "name": "Open WebUI",
+        "scope": "host",
         "target": "http://localhost:3000",
     },
     "open-webui": {
         "name": "Open WebUI",
+        "scope": "host",
         "target": "http://localhost:3000",
     },
 
     "searxng": {
         "name": "SearXNG",
+        "scope": "host",
         "target": "http://localhost:8081",
     },
 
     "langfuse": {
         "name": "Langfuse",
+        "scope": "host",
         "target": "http://localhost:3100",
     },
 
@@ -51,19 +56,23 @@ SERVICES = {
 
     "frontend": {
         "name": "CyberTron C.O.R.E. Frontend",
+        "scope": "host",
         "target": "http://localhost:5173",
     },
     "core frontend": {
         "name": "CyberTron C.O.R.E. Frontend",
+        "scope": "host",
         "target": "http://localhost:5173",
     },
 
     "backend": {
         "name": "CyberTron C.O.R.E. Backend",
+        "scope": "host",
         "target": "http://localhost:8000/api/health",
     },
     "core backend": {
         "name": "CyberTron C.O.R.E. Backend",
+        "scope": "host",
         "target": "http://localhost:8000/api/health",
     },
 }

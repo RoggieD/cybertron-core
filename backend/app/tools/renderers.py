@@ -214,6 +214,9 @@ def render_verified_tool_result(
     if tool_id == "network.reachability":
         return render_reachability(result)
 
+    if tool_id == "service.status":
+        return render_service_status(result)
+
     return None
 
 
@@ -310,6 +313,9 @@ def should_return_verified_only(
         return True
 
     if tool_id == "network.reachability":
+        return True
+
+    if tool_id == "service.status":
         return True
 
     return False
@@ -617,5 +623,50 @@ def render_reachability(result: dict) -> str:
                 str(error),
             ]
         )
+
+    return "\n".join(lines)
+
+
+def render_service_status(result: dict) -> str:
+    total = result.get("total", 0)
+    reachable = result.get("reachable", 0)
+    unreachable = result.get("unreachable", 0)
+    services = result.get("services") or []
+
+    lines = [
+        "SERVICE HEALTH SUMMARY — VERIFIED",
+        "",
+        f"Services checked: {total}",
+        f"Reachable: {reachable}",
+        f"Unreachable: {unreachable}",
+        "",
+        "Services:",
+    ]
+
+    for service in services:
+        status = "UP" if service.get("reachable") else "DOWN"
+        name = service.get("name") or "unknown"
+        scope = service.get("scope") or "unknown"
+        code = service.get("status_code")
+        latency = service.get("latency_ms")
+
+        detail = [
+            f"- {status}",
+            name,
+            f"[{scope}]",
+        ]
+
+        if code is not None:
+            detail.append(f"HTTP {code}")
+
+        if latency is not None:
+            detail.append(f"{latency} ms")
+
+        lines.append(" | ".join(detail))
+
+        error = service.get("error")
+
+        if error:
+            lines.append(f"  Error: {error}")
 
     return "\n".join(lines)
