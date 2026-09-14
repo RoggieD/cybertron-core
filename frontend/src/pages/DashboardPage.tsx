@@ -182,7 +182,9 @@ export default function DashboardPage() {
   const [sttProvider, setSttProvider] = useState("WHISPER");
   const [sttReady, setSttReady] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
+  const [speechAnalyser, setSpeechAnalyser] = useState<AnalyserNode | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechAudioContextRef = useRef<AudioContext | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -205,6 +207,15 @@ export default function DashboardPage() {
 
     const context = audioContextRef.current;
     audioContextRef.current = null;
+    if (context && context.state !== "closed") {
+      void context.close();
+    }
+  }
+
+  function stopSpeechAnalysis() {
+    setSpeechAnalyser(null);
+    const context = speechAudioContextRef.current;
+    speechAudioContextRef.current = null;
     if (context && context.state !== "closed") {
       void context.close();
     }
@@ -236,6 +247,7 @@ export default function DashboardPage() {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
       }
+      stopSpeechAnalysis();
     };
   }, []);
 
@@ -332,6 +344,7 @@ export default function DashboardPage() {
     audio.currentTime = 0;
     URL.revokeObjectURL(audio.src);
     audioRef.current = null;
+    stopSpeechAnalysis();
     setVoiceState("READY");
   }
 
@@ -351,19 +364,34 @@ export default function DashboardPage() {
       }
 
       const audio = new Audio(url);
+      const context = new AudioContext();
+      const source = context.createMediaElementSource(audio);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.72;
+      source.connect(analyser);
+      analyser.connect(context.destination);
+      speechAudioContextRef.current = context;
+      setSpeechAnalyser(analyser);
+
       audioRef.current = audio;
       audio.onended = () => {
         URL.revokeObjectURL(url);
         audioRef.current = null;
+        stopSpeechAnalysis();
         setVoiceState("READY");
       };
       audio.onerror = () => {
         URL.revokeObjectURL(url);
         audioRef.current = null;
+        stopSpeechAnalysis();
         setVoiceState("ERROR");
       };
+      await context.resume();
+      setVoiceState("SPEAKING");
       await audio.play();
     } catch {
+      stopSpeechAnalysis();
       setVoiceState("ERROR");
     }
   }
@@ -641,6 +669,7 @@ export default function DashboardPage() {
         activeTool={activeTool}
         activeModel={activeModel}
         orchestrationState={displayedReactorState}
+        speechAnalyser={speechAnalyser}
       />
       <section className="header">
         <p className="eyebrow">CYBERTRON SYSTEMS</p>
