@@ -1293,3 +1293,39 @@ footer {
   letter-spacing: 0.08em;
   opacity: 0.45;
 }
+
+.incident-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.incident-filters {
+  display: flex;
+  gap: 5px;
+}
+
+.incident-filters button {
+  appearance: none;
+  border: 1px solid rgba(0, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  padding: 5px 8px;
+  cursor: pointer;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+}
+
+.incident-filters button.active {
+  border-color: currentColor;
+  background: rgba(0, 255, 255, 0.08);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.15);
+}
+
+@media (max-width: 700px) {
+  .incident-header,
+  .incident-header-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -138,6 +138,7 @@ export type IncidentEvent = {
   timestamp?: string;
   value?: number | null;
   threshold?: number | null;
+  duration_seconds?: number | null;
 };
 
 export type IncidentResponse = {

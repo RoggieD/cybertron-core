@@ -194,6 +194,8 @@ export default function App() {
     useState<IncidentEvent[]>([]);
   const [activeIncidentIds, setActiveIncidentIds] =
     useState<string[]>([]);
+  const [incidentFilter, setIncidentFilter] =
+    useState<"all" | "opened" | "resolved">("all");
 
   useEffect(() => {
     let active = true;
@@ -409,7 +411,7 @@ export default function App() {
 
     const refreshIncidents = async () => {
       try {
-        const data = await getIncidents(20);
+        const data = await getIncidents(50);
 
         if (active) {
           setIncidents(data.incidents);
@@ -760,16 +762,39 @@ export default function App() {
             </strong>
           </div>
 
-          <div
-            className={
-              activeIncidentIds.length === 0
-                ? "incident-indicator nominal"
-                : "incident-indicator active"
-            }
-          >
-            {activeIncidentIds.length === 0
-              ? "NOMINAL"
-              : "ATTENTION"}
+          <div className="incident-header-actions">
+            <div className="incident-filters">
+              {(["all", "opened", "resolved"] as const).map(
+                (filter) => (
+                  <button
+                    type="button"
+                    key={filter}
+                    className={
+                      incidentFilter === filter
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setIncidentFilter(filter)
+                    }
+                  >
+                    {filter.toUpperCase()}
+                  </button>
+                )
+              )}
+            </div>
+
+            <div
+              className={
+                activeIncidentIds.length === 0
+                  ? "incident-indicator nominal"
+                  : "incident-indicator active"
+              }
+            >
+              {activeIncidentIds.length === 0
+                ? "NOMINAL"
+                : "ATTENTION"}
+            </div>
           </div>
         </div>
 
@@ -780,8 +805,13 @@ export default function App() {
         ) : (
           <div className="incident-list">
             {[...incidents]
+              .filter(
+                (incident) =>
+                  incidentFilter === "all" ||
+                  incident.state === incidentFilter
+              )
               .reverse()
-              .slice(0, 8)
+              .slice(0, 12)
               .map((incident, index) => (
                 <article
                   key={`${incident.id}-${incident.timestamp ?? index}`}
@@ -802,6 +832,11 @@ export default function App() {
                           incident.timestamp
                         ).toLocaleTimeString()
                       : "TIME N/A"}
+
+                    {"duration_seconds" in incident &&
+                    typeof incident.duration_seconds === "number"
+                      ? ` • ${incident.duration_seconds.toFixed(1)} sec`
+                      : ""}
                   </small>
                 </article>
               ))}
