@@ -6,6 +6,7 @@ import CoreNavigation, {
 } from "./components/CoreNavigation";
 import DashboardPage from "./pages/DashboardPage";
 import ProcessingPage from "./pages/ProcessingPage";
+import ServicesPage from "./pages/ServicesPage";
 import SystemsPage from "./pages/SystemsPage";
 import "./core-shell.css";
 
@@ -59,8 +60,7 @@ export default function CoreConsole() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const usesLegacyApp =
-    page === "services" || page === "incidents" || page === "memory";
+  const usesLegacyApp = page === "incidents" || page === "memory";
 
   return (
     <>
@@ -69,6 +69,7 @@ export default function CoreConsole() {
       {page === "dashboard" && <DashboardPage />}
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}
+      {page === "services" && <ServicesPage />}
       {usesLegacyApp && <App />}
     </>
   );
