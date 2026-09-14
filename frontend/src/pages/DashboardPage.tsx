@@ -62,7 +62,8 @@ function getTelemetryState(
 
 function microphoneSupported(): boolean {
   return Boolean(
-    navigator.mediaDevices?.getUserMedia &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function" &&
     typeof window.MediaRecorder !== "undefined",
   );
 }
