@@ -1,4 +1,6 @@
 import re
+import socket
+
 from backend.app.agents.registry import get_agent
 from backend.app.agents.base import AgentDefinition
 
@@ -105,6 +107,18 @@ def _matches_keyword(
     )
 
 
+def _mentions_local_host(normalized: str) -> bool:
+    """Match the actual local hostname despite speech punctuation/spacing variants."""
+    compact_message = re.sub(r"[^a-z0-9]", "", normalized)
+    compact_hostname = re.sub(r"[^a-z0-9]", "", socket.gethostname().lower())
+
+    return bool(
+        compact_hostname
+        and len(compact_hostname) >= 4
+        and compact_hostname in compact_message
+    )
+
+
 def route_agent(message: str) -> AgentDefinition:
     normalized = message.lower()
 
@@ -116,6 +130,9 @@ def route_agent(message: str) -> AgentDefinition:
         "cybertron doing",
         "how is cybertron",
     )
+
+    if _mentions_local_host(normalized):
+        return get_agent("system")
 
     if any(
         phrase in normalized
