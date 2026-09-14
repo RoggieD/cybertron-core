@@ -1,3 +1,7 @@
+from backend.app.tools.memory import (
+    memory_read,
+    memory_search,
+)
 from backend.app.tools.incidents import incident_summary
 from backend.app.tools.overview import system_overview
 from backend.app.tools.services import service_status
@@ -51,6 +55,31 @@ TOOLS = {
         read_only=True,
         handler=incident_summary,
     ),
+    "memory.search": ToolDefinition(
+        id="memory.search",
+        name="Memory Search",
+        description=(
+            "Search persistent C.O.R.E. memory. "
+            "Agent-facing access is read-only and "
+            "restricted to system/shared scopes."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=memory_search,
+    ),
+
+    "memory.read": ToolDefinition(
+        id="memory.read",
+        name="Memory Read",
+        description=(
+            "Read one persistent C.O.R.E. memory "
+            "record by ID when policy permits."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=memory_read,
+    ),
+
     "system.overview": ToolDefinition(
         id="system.overview",
         name="System Overview",

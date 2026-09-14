@@ -1039,3 +1039,131 @@ def render_incident_time_summary(
         )
 
     return "\\n".join(lines)
+
+
+def render_memory_search(
+    result: dict,
+) -> str:
+    if not result.get("allowed"):
+        return (
+            "MEMORY SEARCH — DENIED\n\n"
+            + result.get(
+                "reason",
+                "Memory policy denied access.",
+            )
+        )
+
+    memories = (
+        result.get("memories")
+        or []
+    )
+
+    lines = [
+        "MEMORY SEARCH — VERIFIED",
+        "",
+        (
+            "Scope: "
+            f"{result.get('scope', '?')}"
+        ),
+        (
+            "Matches: "
+            f"{result.get('count', len(memories))}"
+        ),
+        "",
+    ]
+
+    if not memories:
+        lines.append(
+            "No matching memories found."
+        )
+        return "\n".join(lines)
+
+    for memory in memories:
+        tags = ", ".join(
+            memory.get("tags") or []
+        )
+
+        lines.append(
+            f"- [{memory.get('kind', '?')}] "
+            f"{memory.get('content', '')}"
+        )
+
+        lines.append(
+            f"  ID: {memory.get('id')}"
+        )
+
+        if tags:
+            lines.append(
+                f"  Tags: {tags}"
+            )
+
+        if memory.get("source"):
+            lines.append(
+                "  Source: "
+                f"{memory.get('source')}"
+            )
+
+    return "\n".join(lines)
+
+
+def render_memory_read(
+    result: dict,
+) -> str:
+    if not result.get("allowed"):
+        return (
+            "MEMORY READ — DENIED\n\n"
+            + result.get(
+                "reason",
+                "Memory policy denied access.",
+            )
+        )
+
+    memory = (
+        result.get("memory")
+        or {}
+    )
+
+    tags = ", ".join(
+        memory.get("tags") or []
+    )
+
+    lines = [
+        "MEMORY RECORD — VERIFIED",
+        "",
+        f"ID: {memory.get('id')}",
+        (
+            "Namespace: "
+            f"{memory.get('namespace')}"
+        ),
+        (
+            "Scope: "
+            f"{memory.get('scope')}"
+        ),
+        (
+            "Kind: "
+            f"{memory.get('kind')}"
+        ),
+        "",
+        str(
+            memory.get(
+                "content",
+                "",
+            )
+        ),
+    ]
+
+    if tags:
+        lines.extend(
+            [
+                "",
+                f"Tags: {tags}",
+            ]
+        )
+
+    if memory.get("source"):
+        lines.append(
+            "Source: "
+            f"{memory.get('source')}"
+        )
+
+    return "\n".join(lines)
