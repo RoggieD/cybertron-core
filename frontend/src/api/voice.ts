@@ -19,12 +19,8 @@ export type TranscriptionResult = {
   model: string;
 };
 
-function apiBase(): string {
-  return `http://${window.location.hostname}:8000`;
-}
-
 export async function getVoiceStatus(): Promise<VoiceStatus> {
-  const response = await fetch(`${apiBase()}/api/voice/status`);
+  const response = await fetch("/api/voice/status");
   if (!response.ok) {
     throw new Error(`Voice status returned ${response.status}`);
   }
@@ -32,7 +28,7 @@ export async function getVoiceStatus(): Promise<VoiceStatus> {
 }
 
 export async function getSttStatus(): Promise<SttStatus> {
-  const response = await fetch(`${apiBase()}/api/voice/stt/status`);
+  const response = await fetch("/api/voice/stt/status");
   if (!response.ok) {
     throw new Error(`STT status returned ${response.status}`);
   }
@@ -46,7 +42,7 @@ export async function transcribeAudio(
   const form = new FormData();
   form.append("file", audio, filename);
 
-  const response = await fetch(`${apiBase()}/api/voice/transcribe`, {
+  const response = await fetch("/api/voice/transcribe", {
     method: "POST",
     body: form,
   });
@@ -63,7 +59,7 @@ export async function synthesizeSpeech(
   text: string,
   voice?: string,
 ): Promise<Blob> {
-  const response = await fetch(`${apiBase()}/api/voice/speech`, {
+  const response = await fetch("/api/voice/speech", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, voice }),
