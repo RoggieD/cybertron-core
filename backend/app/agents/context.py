@@ -70,6 +70,52 @@ Rules:
 
         return "\n".join(lines)
 
+    if tool_id == "memory.search":
+        count = int(result.get("count", 0) or 0)
+        scope = result.get("scope", "unknown")
+        allowed = bool(result.get("allowed", False))
+        memories = result.get("memories") or []
+
+        lines = [
+            "VERIFIED TOOL DATA",
+            "Source: memory.search",
+            f"Search allowed: {allowed}",
+            f"Search scope: {scope}",
+            f"Matches returned by this specific search: {count}",
+            "",
+            "Interpretation rules:",
+            (
+                "- This result describes only this explicit memory.search "
+                "invocation and its query/scope."
+            ),
+            (
+                "- A zero match count means this specific search found no "
+                "additional matching records."
+            ),
+            (
+                "- Never infer from a zero result that persistent memory is "
+                "empty or that separately injected verified memory context "
+                "does not exist."
+            ),
+            (
+                "- If VERIFIED PERSISTENT MEMORY — CONTEXT RETRIEVAL appears "
+                "elsewhere in the system prompt, preserve those records as "
+                "valid context even when this tool result is zero."
+            ),
+        ]
+
+        if memories:
+            lines.extend(["", "MATCHING RECORDS:"])
+            for index, memory in enumerate(memories, start=1):
+                lines.append(
+                    f"{index}. [{memory.get('kind', 'unknown')}] "
+                    f"{memory.get('content', '')} "
+                    f"(scope: {memory.get('scope', 'unknown')}; "
+                    f"source: {memory.get('source') or 'unknown'})"
+                )
+
+        return "\n".join(lines)
+
     return (
         "VERIFIED TOOL DATA\n"
         f"Source: {tool_id}\n"
