@@ -5,6 +5,7 @@ import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
 import DashboardPage from "./pages/DashboardPage";
+import IncidentsPage from "./pages/IncidentsPage";
 import ProcessingPage from "./pages/ProcessingPage";
 import ServicesPage from "./pages/ServicesPage";
 import SystemsPage from "./pages/SystemsPage";
@@ -60,8 +61,6 @@ export default function CoreConsole() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const usesLegacyApp = page === "incidents" || page === "memory";
-
   return (
     <>
       <CoreNavigation page={page} onNavigate={navigate} />
@@ -70,7 +69,8 @@ export default function CoreConsole() {
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}
       {page === "services" && <ServicesPage />}
-      {usesLegacyApp && <App />}
+      {page === "incidents" && <IncidentsPage />}
+      {page === "memory" && <App />}
     </>
   );
 }
