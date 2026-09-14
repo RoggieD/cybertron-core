@@ -1,0 +1,281 @@
+import { useEffect, useState } from "react";
+
+import {
+  getServiceStatus,
+  getStatusOverview,
+  getTelemetryHistory,
+  type StatusOverview,
+} from "../api/status";
+
+import "../styles.css";
+
+type TelemetrySample = {
+  timestamp: number;
+  cpu: number;
+  memory: number;
+  disk: number;
+  serviceLatency: number;
+};
+
+type TelemetryRange = "2m" | "15m" | "1h" | "24h";
+
+const TELEMETRY_RANGES = {
+  "2m": { label: "2 MIN", milliseconds: 2 * 60 * 1000, historyLimit: 8 },
+  "15m": { label: "15 MIN", milliseconds: 15 * 60 * 1000, historyLimit: 60 },
+  "1h": { label: "1 HOUR", milliseconds: 60 * 60 * 1000, historyLimit: 240 },
+  "24h": { label: "24 HOUR", milliseconds: 24 * 60 * 60 * 1000, historyLimit: 5760 },
+} as const;
+
+function Sparkline({ values, maxValue = 100 }: { values: number[]; maxValue?: number }) {
+  if (values.length < 2) {
+    return <div className="sparkline-empty">ACQUIRING DATA</div>;
+  }
+
+  const width = 240;
+  const height = 56;
+  const effectiveMax = Math.max(maxValue, ...values, 1);
+  const points = values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * width;
+      const y = height - Math.min(value / effectiveMax, 1) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline points={points} />
+    </svg>
+  );
+}
+
+function formatUptime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+
+  return `${hours}h ${minutes}m`;
+}
+
+export default function SystemsPage() {
+  const [overview, setOverview] = useState<StatusOverview | null>(null);
+  const [overviewError, setOverviewError] = useState(false);
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetrySample[]>([]);
+  const [telemetryRange, setTelemetryRange] = useState<TelemetryRange>("2m");
+
+  useEffect(() => {
+    let active = true;
+    const range = TELEMETRY_RANGES[telemetryRange];
+    const cutoff = Date.now() - range.milliseconds;
+
+    void getTelemetryHistory(range.historyLimit)
+      .then((history) => {
+        if (!active) return;
+
+        setTelemetryHistory(
+          history.samples
+            .map((sample) => ({
+              timestamp: new Date(sample.timestamp).getTime(),
+              cpu: sample.cpu_percent,
+              memory: sample.memory_percent,
+              disk: sample.disk_percent,
+              serviceLatency: sample.service_latency_ms,
+            }))
+            .filter((sample) => sample.timestamp >= cutoff),
+        );
+      })
+      .catch(() => {
+        // Live telemetry continues if persisted history is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [telemetryRange]);
+
+  useEffect(() => {
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const [data, serviceData] = await Promise.all([
+          getStatusOverview(),
+          getServiceStatus(),
+        ]);
+
+        if (!active) return;
+
+        setOverview(data);
+        setOverviewError(false);
+
+        const latencyValues = serviceData.services
+          .map((service) => service.latency_ms)
+          .filter((value): value is number => typeof value === "number");
+
+        const averageLatency = latencyValues.length
+          ? latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length
+          : 0;
+
+        setTelemetryHistory((current) => {
+          const now = Date.now();
+          const cutoff = now - TELEMETRY_RANGES[telemetryRange].milliseconds;
+
+          return [
+            ...current,
+            {
+              timestamp: now,
+              cpu: data.system.cpu.usage_percent,
+              memory: data.system.memory.usage_percent,
+              disk: data.system.disk.usage_percent,
+              serviceLatency: averageLatency,
+            },
+          ].filter((sample) => sample.timestamp >= cutoff);
+        });
+      } catch {
+        if (active) setOverviewError(true);
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [telemetryRange]);
+
+  return (
+    <main className="core-shell">
+      <section className="header">
+        <p className="eyebrow">SYSTEM INTELLIGENCE</p>
+        <h1>
+          C.O.R.E. <span>Systems</span>
+        </h1>
+        <p className="subtitle">Host telemetry, capacity, runtime health, and infrastructure trends</p>
+      </section>
+
+      <section className="telemetry-panel">
+        <div className="telemetry-header">
+          <div>
+            <span>LIVE SYSTEM TELEMETRY</span>
+            <strong>{overview?.system.hostname ?? "ACQUIRING..."}</strong>
+          </div>
+
+          <div className={`telemetry-state ${overviewError ? "telemetry-warning" : "telemetry-healthy"}`}>
+            {overviewError ? "LINK ERROR" : "ONLINE"}
+          </div>
+        </div>
+
+        <div className="telemetry-grid">
+          <article className="telemetry-card">
+            <span>CPU</span>
+            <strong>{overview ? `${overview.system.cpu.usage_percent}%` : "--"}</strong>
+            <div className="meter"><div style={{ width: `${overview?.system.cpu.usage_percent ?? 0}%` }} /></div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>MEMORY</span>
+            <strong>{overview ? `${overview.system.memory.usage_percent}%` : "--"}</strong>
+            <div className="meter"><div style={{ width: `${overview?.system.memory.usage_percent ?? 0}%` }} /></div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>DISK</span>
+            <strong>{overview ? `${overview.system.disk.usage_percent}%` : "--"}</strong>
+            <div className="meter"><div style={{ width: `${overview?.system.disk.usage_percent ?? 0}%` }} /></div>
+          </article>
+
+          <article className="telemetry-card">
+            <span>UPTIME</span>
+            <strong>{overview ? formatUptime(overview.system.uptime_seconds) : "--"}</strong>
+          </article>
+
+          <article className="telemetry-card">
+            <span>DOCKER</span>
+            <strong>{overview ? `${overview.docker.running}/${overview.docker.total}` : "--"}</strong>
+            <small>RUNNING</small>
+          </article>
+
+          <article className="telemetry-card">
+            <span>SERVICES</span>
+            <strong className={overview?.services.unreachable === 0 ? "online" : "warning"}>
+              {overview ? `${overview.services.reachable}/${overview.services.total}` : "--"}
+            </strong>
+            <small>HEALTHY</small>
+          </article>
+
+          <article className="telemetry-card">
+            <span>LISTENERS</span>
+            <strong>{overview?.network.listeners ?? "--"}</strong>
+            <small>ACTIVE SOCKETS</small>
+          </article>
+        </div>
+      </section>
+
+      <section className="trend-panel">
+        <div className="trend-header">
+          <div>
+            <span>ROLLING TELEMETRY</span>
+            <strong>{TELEMETRY_RANGES[telemetryRange].label}</strong>
+          </div>
+
+          <div className="trend-controls">
+            {(Object.keys(TELEMETRY_RANGES) as TelemetryRange[]).map((range) => (
+              <button
+                type="button"
+                key={range}
+                className={telemetryRange === range ? "active" : ""}
+                onClick={() => setTelemetryRange(range)}
+              >
+                {TELEMETRY_RANGES[range].label}
+              </button>
+            ))}
+          </div>
+
+          <small>{telemetryHistory.length} SAMPLES</small>
+        </div>
+
+        <div className="trend-grid">
+          <article className="trend-card">
+            <div><span>CPU</span><strong>{overview ? `${overview.system.cpu.usage_percent}%` : "--"}</strong></div>
+            <Sparkline values={telemetryHistory.map((sample) => sample.cpu)} />
+          </article>
+
+          <article className="trend-card">
+            <div><span>MEMORY</span><strong>{overview ? `${overview.system.memory.usage_percent}%` : "--"}</strong></div>
+            <Sparkline values={telemetryHistory.map((sample) => sample.memory)} />
+          </article>
+
+          <article className="trend-card">
+            <div><span>DISK</span><strong>{overview ? `${overview.system.disk.usage_percent}%` : "--"}</strong></div>
+            <Sparkline values={telemetryHistory.map((sample) => sample.disk)} />
+          </article>
+
+          <article className="trend-card">
+            <div>
+              <span>AVG SERVICE LATENCY</span>
+              <strong>
+                {telemetryHistory.length
+                  ? `${telemetryHistory[telemetryHistory.length - 1].serviceLatency.toFixed(1)} ms`
+                  : "--"}
+              </strong>
+            </div>
+            <Sparkline values={telemetryHistory.map((sample) => sample.serviceLatency)} maxValue={500} />
+          </article>
+        </div>
+      </section>
+
+      <footer>Dedicated system telemetry and infrastructure health</footer>
+    </main>
+  );
+}
