@@ -1,11 +1,93 @@
+import sqlite3
 from datetime import datetime, timezone
-from collections import deque
+from pathlib import Path
 from threading import Lock
 
 
-_incidents = deque(maxlen=200)
+DB_PATH = Path("data/cybertron.db")
 _lock = Lock()
 _active_ids: set[str] = set()
+
+
+def _connect() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA journal_mode=WAL")
+
+    return connection
+
+
+def initialize() -> None:
+    with _connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                incident_id TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                state TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                value REAL,
+                threshold REAL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_incidents_timestamp
+            ON incidents(timestamp)
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_incidents_incident_id
+            ON incidents(incident_id)
+            """
+        )
+
+
+def _insert_event(event: dict) -> None:
+    initialize()
+
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO incidents (
+                incident_id,
+                severity,
+                title,
+                message,
+                state,
+                timestamp,
+                value,
+                threshold
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event["id"],
+                event.get("severity", "info"),
+                event.get("title", "Incident"),
+                event.get("message", ""),
+                event.get("state", "opened"),
+                event.get(
+                    "timestamp",
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+                ),
+                event.get("value"),
+                event.get("threshold"),
+            ),
+        )
 
 
 def update_incidents(
@@ -23,21 +105,18 @@ def update_incidents(
             if alert["id"] not in _active_ids:
                 event = dict(alert)
                 event["state"] = "opened"
-                _incidents.append(event)
+                _insert_event(event)
 
-        resolved = (
-            _active_ids - current_ids
-        )
+        resolved = _active_ids - current_ids
 
         for alert_id in resolved:
-            _incidents.append(
+            _insert_event(
                 {
                     "id": alert_id,
                     "severity": "info",
                     "title": "Incident Resolved",
                     "message": (
-                        f"{alert_id} returned "
-                        "to normal."
+                        f"{alert_id} returned to normal."
                     ),
                     "state": "resolved",
                     "timestamp": datetime.now(
@@ -52,10 +131,42 @@ def update_incidents(
 def recent_incidents(
     limit: int = 50,
 ) -> list[dict]:
-    limit = max(1, min(limit, 200))
+    initialize()
 
-    with _lock:
-        return list(_incidents)[-limit:]
+    limit = max(1, min(limit, 500))
+
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                incident_id,
+                severity,
+                title,
+                message,
+                state,
+                timestamp,
+                value,
+                threshold
+            FROM incidents
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["incident_id"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "message": row["message"],
+            "state": row["state"],
+            "timestamp": row["timestamp"],
+            "value": row["value"],
+            "threshold": row["threshold"],
+        }
+        for row in reversed(rows)
+    ]
 
 
 def active_incident_ids() -> list[str]:
