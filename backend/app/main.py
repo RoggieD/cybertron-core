@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.chat import router as chat_router
 from backend.app.api.health import router as health_router
@@ -24,6 +25,18 @@ app = FastAPI(
 )
 
 app.add_middleware(ConversationMemoryMiddleware)
+
+# The Vite development UI is served from a different origin/port than the
+# FastAPI backend. Browser requests therefore require explicit CORS headers
+# even when both services run on the same host. This development policy does
+# not enable credentials and can be tightened to named origins for production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(chat_router)
