@@ -23,13 +23,37 @@ def _severity_rank(value: str) -> int:
     }.get(value, 0)
 
 
+def _score_findings(findings: list[dict]) -> tuple[dict, int, str]:
+    severity_counts = {
+        severity: sum(1 for item in findings if item["severity"] == severity)
+        for severity in ("high", "medium", "low", "info")
+    }
+
+    score = min(
+        100,
+        severity_counts["high"] * 35
+        + severity_counts["medium"] * 18
+        + severity_counts["low"] * 7,
+    )
+
+    if score >= 60:
+        posture = "high-attention"
+    elif score >= 30:
+        posture = "elevated"
+    elif score > 0:
+        posture = "observed"
+    else:
+        posture = "baseline"
+
+    return severity_counts, score, posture
+
+
 async def security_snapshot() -> dict:
     """Build a deterministic, local defensive posture snapshot.
 
     Observation is read-only with respect to the host. C.O.R.E. records the
-    snapshot as defensive telemetry so later assessments can detect changes in
-    listeners, process names, attention score, and posture. It does not probe
-    external systems, exploit services, or alter host configuration.
+    snapshot as defensive telemetry so later assessments can detect meaningful
+    exposure changes without treating ordinary process churn as an alert.
     """
 
     system, listeners, processes = await asyncio.gather(
@@ -71,15 +95,16 @@ async def security_snapshot() -> dict:
     if unknown_owner_listeners:
         findings.append(
             {
-                "id": "unknown-listener-owner",
-                "severity": "low",
+                "id": "listener-owner-visibility",
+                "severity": "info",
                 "category": "visibility",
-                "title": "Listener ownership could not be resolved",
+                "title": "Listener ownership visibility is incomplete",
                 "evidence_count": len(unknown_owner_listeners),
                 "evidence": unknown_owner_listeners[:20],
                 "interpretation": (
-                    "C.O.R.E. could see the listening socket but could not "
-                    "attribute it to a process with current permissions."
+                    "C.O.R.E. can see these sockets but current permissions did not "
+                    "resolve their owning processes. Treat this as a visibility "
+                    "limitation, not suspicious activity by itself."
                 ),
             }
         )
@@ -129,37 +154,13 @@ async def security_snapshot() -> dict:
                 "evidence_count": len(hot_processes),
                 "evidence": hot_processes[:10],
                 "interpretation": (
-                    "This is an operational observation, not an indicator of compromise. "
-                    "It can be correlated with incidents or later baselines."
+                    "This is operational context, not an indicator of compromise. "
+                    "It becomes more useful when correlated with exposure changes."
                 ),
             }
         )
 
-    findings.sort(
-        key=lambda item: _severity_rank(item["severity"]),
-        reverse=True,
-    )
-
-    severity_counts = {
-        severity: sum(1 for item in findings if item["severity"] == severity)
-        for severity in ("high", "medium", "low", "info")
-    }
-
-    score = min(
-        100,
-        severity_counts["high"] * 35
-        + severity_counts["medium"] * 18
-        + severity_counts["low"] * 7,
-    )
-
-    if score >= 60:
-        posture = "high-attention"
-    elif score >= 30:
-        posture = "elevated"
-    elif score > 0:
-        posture = "observed"
-    else:
-        posture = "baseline"
+    base_severity_counts, base_score, base_posture = _score_findings(findings)
 
     generated_at = datetime.now(timezone.utc).isoformat()
     evidence = {
@@ -176,8 +177,8 @@ async def security_snapshot() -> dict:
 
     telemetry_record = {
         "generated_at": generated_at,
-        "posture": posture,
-        "attention_score": score,
+        "posture": base_posture,
+        "attention_score": base_score,
         "evidence": evidence,
         "raw_evidence": {
             "listeners": listeners.get("listeners", []),
@@ -189,30 +190,69 @@ async def security_snapshot() -> dict:
         telemetry_record
     )
 
-    if baseline_comparison.get("has_previous_baseline") and baseline_comparison.get("changed"):
-        findings.insert(
-            0,
-            {
-                "id": "baseline-change",
-                "severity": "medium"
-                if baseline_comparison.get("new_listeners")
-                else "low",
-                "category": "change-detection",
-                "title": "Security-relevant host state changed since prior snapshot",
-                "evidence_count": (
-                    len(baseline_comparison.get("new_listeners", []))
-                    + len(baseline_comparison.get("removed_listeners", []))
-                    + len(baseline_comparison.get("new_process_names", []))
-                    + len(baseline_comparison.get("removed_process_names", []))
-                ),
-                "evidence": baseline_comparison,
-                "interpretation": (
-                    "C.O.R.E. detected a difference from the immediately previous "
-                    "defensive snapshot. Changes are observations and require context "
-                    "before being treated as suspicious."
-                ),
-            },
-        )
+    if baseline_comparison.get("has_previous_baseline"):
+        new_public = baseline_comparison.get("new_public_listener_endpoints", [])
+        new_endpoints = baseline_comparison.get("new_listener_endpoints", [])
+        removed_endpoints = baseline_comparison.get("removed_listener_endpoints", [])
+        posture_changed = bool(baseline_comparison.get("posture_changed"))
+        score_delta = int(baseline_comparison.get("attention_score_delta") or 0)
+
+        if new_public:
+            findings.append(
+                {
+                    "id": "new-public-exposure",
+                    "severity": "high",
+                    "category": "change-detection",
+                    "title": "New externally bound listener detected",
+                    "evidence_count": len(new_public),
+                    "evidence": new_public,
+                    "interpretation": (
+                        "A listener now exists on an all-interface bind that was not "
+                        "present in the immediately previous defensive snapshot. "
+                        "Validate that the service and exposure are expected."
+                    ),
+                }
+            )
+        elif new_endpoints or posture_changed or score_delta > 0:
+            findings.append(
+                {
+                    "id": "security-relevant-change",
+                    "severity": "medium",
+                    "category": "change-detection",
+                    "title": "Security-relevant host state changed",
+                    "evidence_count": len(new_endpoints),
+                    "evidence": {
+                        "new_listener_endpoints": new_endpoints,
+                        "posture_changed": posture_changed,
+                        "attention_score_delta": score_delta,
+                    },
+                    "interpretation": (
+                        "C.O.R.E. detected an exposure or posture change worth review. "
+                        "This is an observation and does not prove compromise."
+                    ),
+                }
+            )
+        elif removed_endpoints:
+            findings.append(
+                {
+                    "id": "listener-reduction",
+                    "severity": "low",
+                    "category": "change-detection",
+                    "title": "Listening endpoint removed since prior snapshot",
+                    "evidence_count": len(removed_endpoints),
+                    "evidence": removed_endpoints,
+                    "interpretation": (
+                        "A previously observed listening endpoint is no longer present. "
+                        "This is generally lower priority unless an expected service disappeared."
+                    ),
+                }
+            )
+
+    findings.sort(
+        key=lambda item: _severity_rank(item["severity"]),
+        reverse=True,
+    )
+    severity_counts, score, posture = _score_findings(findings)
 
     return {
         "generated_at": generated_at,
@@ -224,10 +264,18 @@ async def security_snapshot() -> dict:
         "findings": findings,
         "evidence": evidence,
         "baseline_comparison": baseline_comparison,
+        "baseline_context": {
+            "process_churn_is_context_only": True,
+            "new_process_names": baseline_comparison.get("new_process_names", []),
+            "removed_process_names": baseline_comparison.get("removed_process_names", []),
+            "listener_owner_changes": baseline_comparison.get("listener_owner_changes", []),
+        },
         "limitations": [
             "Local host observation only.",
             "No external network scanning was performed.",
             "No vulnerability database lookup was performed.",
+            "Process churn alone is retained as context and does not raise a change finding.",
+            "Unresolved listener ownership is a visibility limitation, not proof of suspicious activity.",
             "Changes from baseline are observations and do not prove compromise.",
             "Each security.snapshot call records defensive telemetry for later comparison.",
         ],
