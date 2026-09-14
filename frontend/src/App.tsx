@@ -24,6 +24,7 @@ import {
 } from "./api/websocket";
 
 import "./styles.css";
+import MemoryApprovalPanel from "./components/MemoryApprovalPanel";
 
 type ReactorState =
   | "IDLE"
@@ -1609,6 +1610,7 @@ export default function App() {
       <footer>
         Local-first AI orchestration control plane
       </footer>
+          <MemoryApprovalPanel />
     </main>
   );
 }
