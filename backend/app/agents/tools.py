@@ -68,7 +68,38 @@ def select_tool(
                 "usually last",
             )
         ):
-            return "incident.summary", {}
+            if (
+                "critical" in normalized
+                or "critical only" in normalized
+            ):
+                return "incident.summary", {
+                    "mode": "critical",
+                }
+
+            if "overnight" in normalized:
+                return "incident.summary", {
+                    "mode": "overnight",
+                }
+
+            if (
+                "what keeps failing" in normalized
+                or "failures" in normalized
+            ):
+                return "incident.summary", {
+                    "mode": "recurring",
+                }
+
+            if (
+                "usually last" in normalized
+                or "how long" in normalized
+            ):
+                return "incident.summary", {
+                    "mode": "duration",
+                }
+
+            return "incident.summary", {
+                "mode": "recent",
+            }
 
         if any(
             phrase in normalized

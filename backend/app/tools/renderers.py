@@ -221,7 +221,9 @@ def render_verified_tool_result(
         return render_system_overview(result)
 
     if tool_id == "incident.summary":
-        return render_incident_summary(result)
+        return render_incident_summary_query_aware(
+            result
+        )
 
     return None
 
@@ -785,5 +787,79 @@ def render_incident_summary(result: dict) -> str:
             )
     else:
         lines.append("- none")
+
+    return "\n".join(lines)
+
+
+def render_incident_summary_query_aware(
+    result: dict,
+) -> str:
+    mode = result.get("mode", "recent")
+    analytics = result.get("analytics") or {}
+    recent = result.get("recent") or []
+
+    if mode == "recurring":
+        lines = [
+            "INCIDENT INTELLIGENCE — VERIFIED",
+            "",
+            "Recurring incidents:",
+        ]
+
+        top = analytics.get("top_incidents") or []
+
+        if not top:
+            lines.append("- none")
+        else:
+            for item in top:
+                lines.append(
+                    f"- {item.get('incident_id')} | "
+                    f"{item.get('occurrences', 0)} occurrence(s)"
+                )
+
+        return "\n".join(lines)
+
+    if mode == "duration":
+        return "\n".join(
+            [
+                "INCIDENT INTELLIGENCE — VERIFIED",
+                "",
+                (
+                    "Average resolution time: "
+                    f"{analytics.get('average_resolution_seconds', 0)} sec"
+                ),
+                (
+                    "Resolved incidents sampled: "
+                    f"{analytics.get('resolved_samples', 0)}"
+                ),
+            ]
+        )
+
+    if mode == "overnight":
+        title = "OVERNIGHT INCIDENTS — VERIFIED"
+
+    elif mode == "critical":
+        title = "CRITICAL INCIDENTS — VERIFIED"
+
+    else:
+        title = "RECENT INCIDENTS — VERIFIED"
+
+    lines = [
+        title,
+        "",
+        f"Events found: {len(recent)}",
+        "",
+    ]
+
+    if not recent:
+        lines.append("No matching incidents found.")
+        return "\n".join(lines)
+
+    for item in recent[-20:]:
+        lines.append(
+            f"- {str(item.get('state', '?')).upper()} | "
+            f"{str(item.get('severity', '?')).upper()} | "
+            f"{item.get('id')} | "
+            f"{item.get('message', '')}"
+        )
 
     return "\n".join(lines)
