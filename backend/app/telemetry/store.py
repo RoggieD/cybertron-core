@@ -28,6 +28,8 @@ def initialize() -> None:
                 memory_percent REAL NOT NULL,
                 disk_percent REAL NOT NULL,
                 gpu_percent REAL,
+                gpu_memory_percent REAL,
+                gpu_power_watts REAL,
                 docker_running INTEGER NOT NULL,
                 docker_total INTEGER NOT NULL,
                 services_reachable INTEGER NOT NULL,
@@ -44,10 +46,15 @@ def initialize() -> None:
                 "PRAGMA table_info(telemetry_samples)"
             ).fetchall()
         }
-        if "gpu_percent" not in columns:
-            connection.execute(
-                "ALTER TABLE telemetry_samples ADD COLUMN gpu_percent REAL"
-            )
+        for column in (
+            "gpu_percent",
+            "gpu_memory_percent",
+            "gpu_power_watts",
+        ):
+            if column not in columns:
+                connection.execute(
+                    f"ALTER TABLE telemetry_samples ADD COLUMN {column} REAL"
+                )
 
         connection.execute(
             """
@@ -70,6 +77,8 @@ def insert_sample(sample: dict) -> None:
                 memory_percent,
                 disk_percent,
                 gpu_percent,
+                gpu_memory_percent,
+                gpu_power_watts,
                 docker_running,
                 docker_total,
                 services_reachable,
@@ -77,7 +86,7 @@ def insert_sample(sample: dict) -> None:
                 listeners,
                 service_latency_ms
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sample["timestamp"],
@@ -85,6 +94,8 @@ def insert_sample(sample: dict) -> None:
                 sample["memory_percent"],
                 sample["disk_percent"],
                 sample.get("gpu_percent"),
+                sample.get("gpu_memory_percent"),
+                sample.get("gpu_power_watts"),
                 sample["docker_running"],
                 sample["docker_total"],
                 sample["services_reachable"],
@@ -109,6 +120,8 @@ def recent_samples(limit: int = 240) -> list[dict]:
                 memory_percent,
                 disk_percent,
                 gpu_percent,
+                gpu_memory_percent,
+                gpu_power_watts,
                 docker_running,
                 docker_total,
                 services_reachable,
