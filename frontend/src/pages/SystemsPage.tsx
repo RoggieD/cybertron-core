@@ -20,6 +20,8 @@ type TelemetrySample = {
   memory: number;
   disk: number;
   gpu: number | null;
+  gpuMemory: number | null;
+  gpuPower: number | null;
   serviceLatency: number;
 };
 
@@ -72,6 +74,11 @@ function formatUptime(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function formatGb(megabytes?: number | null): string {
+  if (typeof megabytes !== "number") return "--";
+  return (megabytes / 1024).toFixed(1);
+}
+
 function EndpointList({ endpoints }: { endpoints: string[] }) {
   if (!endpoints.length) return <small>NONE DETECTED</small>;
 
@@ -109,6 +116,8 @@ export default function SystemsPage() {
               memory: sample.memory_percent,
               disk: sample.disk_percent,
               gpu: typeof sample.gpu_percent === "number" ? sample.gpu_percent : null,
+              gpuMemory: typeof sample.gpu_memory_percent === "number" ? sample.gpu_memory_percent : null,
+              gpuPower: typeof sample.gpu_power_watts === "number" ? sample.gpu_power_watts : null,
               serviceLatency: sample.service_latency_ms,
             }))
             .filter((sample) => sample.timestamp >= cutoff),
@@ -159,6 +168,7 @@ export default function SystemsPage() {
         setTelemetryHistory((current) => {
           const now = Date.now();
           const cutoff = now - TELEMETRY_RANGES[telemetryRange].milliseconds;
+          const gpu = data.system.gpu;
 
           return [
             ...current,
@@ -167,9 +177,9 @@ export default function SystemsPage() {
               cpu: data.system.cpu.usage_percent,
               memory: data.system.memory.usage_percent,
               disk: data.system.disk.usage_percent,
-              gpu: data.system.gpu?.available && typeof data.system.gpu.usage_percent === "number"
-                ? data.system.gpu.usage_percent
-                : null,
+              gpu: gpu?.available && typeof gpu.usage_percent === "number" ? gpu.usage_percent : null,
+              gpuMemory: gpu?.available && typeof gpu.memory_usage_percent === "number" ? gpu.memory_usage_percent : null,
+              gpuPower: gpu?.available && typeof gpu.power_draw_watts === "number" ? gpu.power_draw_watts : null,
               serviceLatency: averageLatency,
             },
           ].filter((sample) => sample.timestamp >= cutoff);
@@ -210,6 +220,9 @@ export default function SystemsPage() {
 
   const gpuValues = telemetryHistory
     .map((sample) => sample.gpu)
+    .filter((value): value is number => typeof value === "number");
+  const gpuMemoryValues = telemetryHistory
+    .map((sample) => sample.gpuMemory)
     .filter((value): value is number => typeof value === "number");
   const currentGpu = overview?.system.gpu;
 
@@ -347,7 +360,21 @@ export default function SystemsPage() {
           <article className="trend-card">
             <div><span>GPU</span><strong>{currentGpu?.available && typeof currentGpu.usage_percent === "number" ? `${currentGpu.usage_percent}%` : "N/A"}</strong></div>
             <Sparkline values={gpuValues} />
-            <small>{currentGpu?.available ? `${currentGpu.name ?? "NVIDIA GPU"} • ${currentGpu.temperature_c ?? "--"}°C` : "GPU TELEMETRY UNAVAILABLE"}</small>
+            <small>
+              {currentGpu?.available
+                ? `${currentGpu.name ?? "NVIDIA GPU"} • ${currentGpu.temperature_c ?? "--"}°C • ${currentGpu.power_draw_watts ?? "--"} W / ${currentGpu.power_limit_watts ?? "--"} W`
+                : "GPU TELEMETRY UNAVAILABLE"}
+            </small>
+          </article>
+
+          <article className="trend-card">
+            <div><span>GPU VRAM</span><strong>{currentGpu?.available && typeof currentGpu.memory_usage_percent === "number" ? `${currentGpu.memory_usage_percent}%` : "N/A"}</strong></div>
+            <Sparkline values={gpuMemoryValues} />
+            <small>
+              {currentGpu?.available
+                ? `${formatGb(currentGpu.memory_used_mb)} / ${formatGb(currentGpu.memory_total_mb)} GB`
+                : "VRAM TELEMETRY UNAVAILABLE"}
+            </small>
           </article>
 
           <article className="trend-card">
