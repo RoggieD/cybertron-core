@@ -36,16 +36,26 @@ async def status_history(
 @router.get("/incidents")
 async def status_incidents(
     limit: int = 50,
+    severity: str | None = None,
+    state: str | None = None,
 ) -> dict:
     from backend.app.telemetry.incidents import (
         active_incident_ids,
         recent_incidents,
     )
 
-    incidents = recent_incidents(limit)
+    incidents = recent_incidents(
+        limit=limit,
+        severity=severity,
+        state=state,
+    )
 
     return {
         "active": active_incident_ids(),
         "count": len(incidents),
+        "filters": {
+            "severity": severity,
+            "state": state,
+        },
         "incidents": incidents,
     }

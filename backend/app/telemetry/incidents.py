@@ -130,43 +130,106 @@ def update_incidents(
 
 def recent_incidents(
     limit: int = 50,
+    severity: str | None = None,
+    state: str | None = None,
 ) -> list[dict]:
     initialize()
 
     limit = max(1, min(limit, 500))
 
+    query = """
+        SELECT
+            id,
+            incident_id,
+            severity,
+            title,
+            message,
+            state,
+            timestamp,
+            value,
+            threshold
+        FROM incidents
+    """
+
+    clauses = []
+    params: list = []
+
+    if severity:
+        clauses.append("severity = ?")
+        params.append(severity.lower())
+
+    if state:
+        clauses.append("state = ?")
+        params.append(state.lower())
+
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
     with _connect() as connection:
         rows = connection.execute(
-            """
-            SELECT
-                incident_id,
-                severity,
-                title,
-                message,
-                state,
-                timestamp,
-                value,
-                threshold
-            FROM incidents
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (limit,),
+            query,
+            tuple(params),
         ).fetchall()
 
-    return [
-        {
-            "id": row["incident_id"],
-            "severity": row["severity"],
-            "title": row["title"],
-            "message": row["message"],
-            "state": row["state"],
-            "timestamp": row["timestamp"],
-            "value": row["value"],
-            "threshold": row["threshold"],
-        }
-        for row in reversed(rows)
-    ]
+        events = [
+            {
+                "id": row["incident_id"],
+                "severity": row["severity"],
+                "title": row["title"],
+                "message": row["message"],
+                "state": row["state"],
+                "timestamp": row["timestamp"],
+                "value": row["value"],
+                "threshold": row["threshold"],
+            }
+            for row in reversed(rows)
+        ]
+
+        # Add duration to resolved incidents by locating
+        # the nearest preceding opened event.
+        for event in events:
+            if event["state"] != "resolved":
+                continue
+
+            opened = connection.execute(
+                """
+                SELECT timestamp
+                FROM incidents
+                WHERE incident_id = ?
+                  AND state = 'opened'
+                  AND timestamp <= ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    event["id"],
+                    event["timestamp"],
+                ),
+            ).fetchone()
+
+            if opened:
+                try:
+                    opened_at = datetime.fromisoformat(
+                        opened["timestamp"]
+                    )
+
+                    resolved_at = datetime.fromisoformat(
+                        event["timestamp"]
+                    )
+
+                    event["duration_seconds"] = round(
+                        (
+                            resolved_at - opened_at
+                        ).total_seconds(),
+                        2,
+                    )
+                except ValueError:
+                    event["duration_seconds"] = None
+
+    return events
 
 
 def active_incident_ids() -> list[str]:
