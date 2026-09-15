@@ -866,6 +866,10 @@ export default function VoiceAgent3D({
             ))}
           </div>
           <form className="voice-agent-chat-form" onSubmit={submitChat}>
+            <button type="button" style={{ gridColumn: "1 / -1" }} disabled={operationActive} onClick={() => {
+              setChatInput("");
+              window.dispatchEvent(new CustomEvent("cybertron:voice-action", { detail: { action: "new-chat" } }));
+            }}>NEW CHAT</button>
             <input
               type="text"
               value={chatInput}

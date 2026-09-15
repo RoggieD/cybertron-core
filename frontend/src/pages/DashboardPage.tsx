@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { getHealth } from "../api/core";
 import { getStatusOverview, type StatusOverview } from "../api/status";
 import { streamChat, cancelChat, type StreamEvent } from "../api/chat";
+import { restoreConversation, saveConversation } from "../api/conversation";
 import {
   getSttStatus,
   getVoiceStatus,
@@ -190,9 +191,29 @@ export default function DashboardPage({
   const [requestPending, setRequestPending] = useState(false);
   const speechGenerationRef = useRef(0);
   const microphoneStartingRef = useRef(false);
-  const [lastRequest, setLastRequest] = useState("");
-  const [responseText, setResponseText] = useState("");
-  const [conversationHistory, setConversationHistory] = useState<Array<{ prompt: string; response: string }>>([]);
+  const [savedConversation] = useState(restoreConversation);
+  const [lastRequest, setLastRequest] = useState(savedConversation.prompt);
+  const [responseText, setResponseText] = useState(savedConversation.response);
+  const [conversationHistory, setConversationHistory] = useState(savedConversation.history);
+  const [historySaveFailed, setHistorySaveFailed] = useState(false);
+  useEffect(() => {
+    const persist = () => setHistorySaveFailed(!saveConversation({
+      history: conversationHistory, prompt: lastRequest, response: responseText, pending: requestPending,
+    }));
+    const timer = window.setTimeout(persist, 250);
+    window.addEventListener("pagehide", persist);
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persist); };
+  }, [conversationHistory, lastRequest, responseText, requestPending]);
+
+  function newChat() {
+    if (requestRef.current || recorderRef.current || microphoneStartingRef.current || voiceState === "TRANSCRIBING") return;
+    stopSpeaking();
+    setConversationHistory([]);
+    setLastRequest("");
+    setResponseText("");
+    setPrompt("");
+    setHistorySaveFailed(!saveConversation({ history: [], prompt: "", response: "", pending: false }));
+  }
   const [reactorState, setReactorState] = useState<ReactorState>("IDLE");
 
   const [activeModel, setActiveModel] = useState("UNKNOWN");
@@ -753,6 +774,7 @@ export default function DashboardPage({
     const handleVoiceAction = (event: Event) => {
       const detail = (event as CustomEvent<{ action?: string; message?: string }>).detail;
       const action = detail?.action;
+      if (action === "new-chat") { newChat(); return; }
       if (action === "cancel") {
         void cancelCurrentRequest();
         return;
@@ -929,6 +951,8 @@ export default function DashboardPage({
         </div>
 
         <div className="response-panel">
+          <button type="button" onClick={newChat} disabled={busy || voiceState === "LISTENING" || voiceState === "TRANSCRIBING"}>NEW CHAT</button>
+          {historySaveFailed && <p role="alert">Chat history could not be saved in this browser.</p>}
           {lastRequest && <><strong>YOU</strong><p>{lastRequest}</p><strong>C.O.R.E.</strong></>}
           {responseText ? (
             <p>{responseText}</p>
