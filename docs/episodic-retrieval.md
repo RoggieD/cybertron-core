@@ -24,8 +24,11 @@ trace available in the existing schema, not a complete recurrence trace list.
 `format_memory_context` supplies the explicitly labeled historical section to
 `build_messages`. Historical summaries are data, never instructions or current
 observations. Recorded outcomes do not independently establish that a fix worked.
-Current-request tools retain authority. Docker recall prompts reach model context
-instead of terminating at the direct inventory renderer.
+Current-request tools retain authority. Historical recall bypasses implicit live
+tool selection, including the broad "what happened" incident shortcut, and
+reaches model context. Explicit persistent-memory search keeps its existing tool.
+Trailing citation/evidence-format instructions are excluded from subject matching.
+Request a current inspection separately when a fresh observation is needed.
 
 ## Live validation
 

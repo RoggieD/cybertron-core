@@ -21,13 +21,23 @@ STOPWORDS = set(
     "i in is it last me my of on or our prior previously historical history recall "
     "remember seen that the them there these they this time to was we were what "
     "when which who why with would you your happened fixed fix again operational "
-    "episode episodes please tell about same".split()
+    "episode episodes please tell about same inspect inspected inspection inspecting".split()
 )
 
 
 def _tokens(text: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9]+", text.lower())
             if len(t) > 1 and t not in STOPWORDS}
+
+
+def _subject_tokens(message: str) -> set[str]:
+    # Citation/evidence-format instructions are not the operational subject.
+    # Strip only trailing instruction clauses, preserving multi-sentence topics.
+    subject = re.split(
+        r"[.!?;]\s*(?:cite|include (?:the )?(?:episode|trace)|distinguish)\b",
+        message, maxsplit=1, flags=re.I,
+    )[0]
+    return _tokens(subject)
 
 
 def retrieve_episodic_context(
@@ -41,10 +51,10 @@ def retrieve_episodic_context(
     """
     if limit <= 0 or not RECALL.search(message):
         return []
-    query = _tokens(message)
+    query = _subject_tokens(message)
     if not query:
         history = get_conversation_history()
-        query = _tokens(history[-1]["prompt"]) if history else set()
+        query = _subject_tokens(history[-1]["prompt"]) if history else set()
     if not query:
         return []
 

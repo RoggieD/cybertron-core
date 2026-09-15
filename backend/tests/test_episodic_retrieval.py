@@ -9,6 +9,10 @@ from backend.app.memory.context_budget import estimate_tokens
 from backend.app.memory.short_term import set_conversation_history, reset_conversation_history
 
 NOW = datetime(2026, 9, 15, tzinfo=timezone.utc)
+LIVE_PROMPT = (
+    "What happened last time we inspected Docker? Cite the historical episode "
+    "and trace IDs, and distinguish that history from any current tool result."
+)
 
 
 @pytest.fixture
@@ -106,3 +110,66 @@ def test_build_messages_integrates_history_and_keeps_live_rules(store, monkeypat
     with_tool = chat.build_messages("Docker timeout before?", "test", "test", "test", "docker.inventory", {})
     assert "LIVE TOOL: healthy now" in with_tool[0]["content"]
     assert episode["id"] in with_tool[0]["content"]
+
+
+@pytest.mark.parametrize("agent_id", ["infrastructure", "system", "security", "general"])
+def test_historical_recall_does_not_select_live_tools(agent_id):
+    from backend.app.agents.registry import get_agent
+    from backend.app.agents.tools import select_tool
+    assert select_tool(get_agent(agent_id), LIVE_PROMPT) == (None, {})
+
+
+def test_current_incident_request_keeps_tool():
+    from backend.app.agents.registry import get_agent
+    from backend.app.agents.tools import select_tool
+    assert select_tool(get_agent("infrastructure"), "What happened today?") == (
+        "incident.summary", {"mode": "today", "severity": None})
+
+
+def test_exact_live_prompt_reaches_model_with_projected_episode(store, monkeypatch):
+    import asyncio
+    import json
+    from backend.app.events.schema import CoreEvent
+    from backend.app.memory.episode_events import episode_from_event
+
+    context = importlib.import_module("backend.app.memory.context")
+    retrieval = importlib.import_module("backend.app.memory.episodic_retrieval")
+    chat = importlib.import_module("backend.app.api.chat")
+    agent_tools = importlib.import_module("backend.app.agents.tools")
+    projected = episode_from_event(CoreEvent(
+        event_type="tool.completed", trace_id="docker-historical-trace",
+        actor={"type": "tool", "id": "docker.inventory"},
+        target={"type": "agent", "id": "infrastructure"},
+        metadata={"result": {"containers": []}},
+    ))
+    episode = store.record(**projected)
+    monkeypatch.setattr(retrieval, "episodic_store", store)
+    monkeypatch.setattr(context, "retrieve_memory_context", lambda *a, **k: [])
+    monkeypatch.setattr(context, "retrieve_knowledge", lambda *a, **k: [])
+    monkeypatch.setattr(context, "format_conversation_context", lambda: "")
+
+    async def no_live_tool(*args, **kwargs):
+        raise AssertionError("Historical recall must not execute an incident/live tool")
+
+    async def provider(**kwargs):
+        system = kwargs["messages"][0]["content"]
+        assert episode["id"] in system
+        assert "docker-historical-trace" in system
+        assert "NOT CURRENT/LIVE EVIDENCE" in system
+        yield {"message": {"content": "historical recall reached model"}, "done": True}
+
+    async def publish(event):
+        pass
+
+    monkeypatch.setattr(agent_tools, "execute_tool", no_live_tool)
+    monkeypatch.setattr(chat.event_bus, "publish", publish)
+    monkeypatch.setattr(chat.model_service.provider, "stream_chat", provider)
+
+    async def scenario():
+        response = await chat.chat_stream(chat.ChatRequest(message=LIVE_PROMPT))
+        events = [json.loads(line) async for line in response.body_iterator]
+        assert "historical recall reached model" in json.dumps(events)
+        assert not any(event["event"] == "tool.result" for event in events)
+        chat.active_requests.clear()
+
+    asyncio.run(scenario())

@@ -3,6 +3,7 @@ import re
 
 from backend.app.agents.base import AgentDefinition
 from backend.app.tools.registry import execute_tool
+from backend.app.memory.episodic_retrieval import RECALL
 
 
 def extract_port(message: str) -> int | None:
@@ -37,6 +38,12 @@ def select_tool(
             "query": memory_query,
             "scope": "all",
         }
+
+    # Historical recall is supplied by build_messages, not an implicit live
+    # inspection. In particular, "what happened last time" must not fall into
+    # the broad "what happened" incident-summary shortcut below.
+    if RECALL.search(message):
+        return None, {}
 
     if agent.id == "security":
         return "security.snapshot", {}
