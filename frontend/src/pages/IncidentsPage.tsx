@@ -15,6 +15,9 @@ import {
 import "../styles.css";
 
 export default function IncidentsPage() {
+  const [incidentError, setIncidentError] = useState(false);
+  const [incidentLoaded, setIncidentLoaded] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(false);
   const [incidents, setIncidents] = useState<IncidentEvent[]>([]);
   const [activeIncidentIds, setActiveIncidentIds] = useState<string[]>([]);
   const [acknowledgedIncidentIds, setAcknowledgedIncidentIds] = useState<string[]>([]);
@@ -32,11 +35,13 @@ export default function IncidentsPage() {
       try {
         const data = await getIncidents(50);
         if (!active) return;
+        setIncidentLoaded(true);
+        setIncidentError(false);
         setIncidents(data.incidents);
         setActiveIncidentIds(data.active);
         setAcknowledgedIncidentIds(data.acknowledged ?? []);
       } catch {
-        // Incident display should never break the UI.
+        if (active) setIncidentError(true);
       }
     };
 
@@ -55,9 +60,9 @@ export default function IncidentsPage() {
     const refreshAnalytics = async () => {
       try {
         const data = await getIncidentAnalytics();
-        if (active) setIncidentAnalytics(data);
+        if (active) { setIncidentAnalytics(data); setAnalyticsError(false); }
       } catch {
-        // Analytics failure should not affect operations UI.
+        if (active) setAnalyticsError(true);
       }
     };
 
@@ -74,6 +79,9 @@ export default function IncidentsPage() {
     setIncidentSearchBusy(true);
     try {
       setIncidents(await searchIncidents(incidentSearch.trim()));
+      setIncidentError(false);
+    } catch {
+      setIncidentError(true);
     } finally {
       setIncidentSearchBusy(false);
     }
@@ -116,6 +124,7 @@ export default function IncidentsPage() {
       </section>
 
       <section className="incident-analytics-panel">
+        {analyticsError && <p role="alert">Incident analytics unavailable. Previous values may be out of date.</p>}
         <div className="incident-analytics-header">
           <div>
             <span>INCIDENT ANALYTICS</span>
@@ -130,13 +139,13 @@ export default function IncidentsPage() {
           <article><span>ACKNOWLEDGED</span><strong>{incidentAnalytics?.acknowledged_events ?? "--"}</strong></article>
           <article>
             <span>AVG RESOLUTION</span>
-            <strong>{incidentAnalytics ? `${incidentAnalytics.average_resolution_seconds.toFixed(1)} sec` : "--"}</strong>
+            <strong>{typeof incidentAnalytics?.average_resolution_seconds === "number" ? `${incidentAnalytics.average_resolution_seconds.toFixed(1)} sec` : "--"}</strong>
           </article>
         </div>
 
         <div className="incident-top-list">
           <span>TOP RECURRING INCIDENTS</span>
-          {incidentAnalytics?.top_incidents.length ? (
+          {incidentAnalytics?.top_incidents?.length ? (
             incidentAnalytics.top_incidents.map((item) => (
               <div key={item.incident_id}>
                 <strong>{item.incident_id}</strong>
@@ -150,10 +159,11 @@ export default function IncidentsPage() {
       </section>
 
       <section className="incident-panel">
+        {incidentError && <p role="alert">Incident data unavailable. Previous results may be out of date.</p>}
         <div className="incident-header">
           <div>
             <span>INCIDENT MONITOR</span>
-            <strong>{activeIncidentIds.length === 0 ? "ALL SYSTEMS NOMINAL" : `${activeIncidentIds.length} ACTIVE`}</strong>
+            <strong>{incidentError ? "DATA UNAVAILABLE" : !incidentLoaded ? "LOADING" : activeIncidentIds.length === 0 ? "NO ACTIVE INCIDENTS" : `${activeIncidentIds.length} ACTIVE`}</strong>
           </div>
 
           <div className="incident-header-actions">
@@ -191,7 +201,7 @@ export default function IncidentsPage() {
             </div>
 
             <div className={activeIncidentIds.length === 0 ? "incident-indicator nominal" : "incident-indicator active"}>
-              {activeIncidentIds.length === 0 ? "NOMINAL" : "ATTENTION"}
+              {incidentError || !incidentLoaded ? "UNKNOWN" : activeIncidentIds.length === 0 ? "CLEAR" : "ATTENTION"}
             </div>
           </div>
         </div>
@@ -213,7 +223,7 @@ export default function IncidentsPage() {
         </div>
 
         {incidents.length === 0 ? (
-          <div className="incident-empty">No incident events recorded this session.</div>
+          <div className="incident-empty">{incidentError ? "Unable to load incident events." : !incidentLoaded ? "Loading incidents..." : "No incident events found."}</div>
         ) : (
           <div className="incident-list">
             {[...incidents]

@@ -557,3 +557,13 @@ html[data-core-theme="neon-green"] .trace-replay-panel { border-color: rgba(201,
 
 .reference-knowledge-panel { border-color: #87aaff66; }
 .reference-knowledge-panel > header strong, .reference-knowledge-panel > header span { color: #a8bfff; }
+
+/* Shared branding stays available on every page. */
+.core-navigation-brand { border: 0; background: transparent; padding: 0; cursor: pointer; flex-shrink: 0; }
+.core-navigation-brand img { display: block; width: 104px; height: 104px; object-fit: contain; }
+.core-navigation-brand:focus-visible { outline: 2px solid #53e6ff; outline-offset: 3px; }
+.dashboard-hero h1 { font-size: clamp(2rem, 4.3vw, 4rem); letter-spacing: .04em; }
+.dashboard-hero h1 span { display: inline-block; font-size: .58em; line-height: 1.4; }
+.dashboard-runtime { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin: 0 auto 24px; font-size: .75rem; }
+.dashboard-runtime strong { margin-left: 8px; }
+@media (max-width: 700px) { .core-navigation { flex-wrap: wrap; gap: 8px; } .core-navigation-brand img { width: 76px; height: 76px; } .core-navigation-controls { flex-wrap: wrap; } }

@@ -1,3 +1,6 @@
+from backend.app.core.config import get_settings
+
+
 SERVICES = {
     "ollama": {
         "name": "Ollama",
@@ -57,12 +60,14 @@ SERVICES = {
     "frontend": {
         "name": "CyberTron C.O.R.E. Frontend",
         "scope": "host",
-        "target": "http://localhost:5173",
+        "target": get_settings().frontend_health_url,
+        "ca_file": get_settings().frontend_health_ca_file,
     },
     "core frontend": {
         "name": "CyberTron C.O.R.E. Frontend",
         "scope": "host",
-        "target": "http://localhost:5173",
+        "target": get_settings().frontend_health_url,
+        "ca_file": get_settings().frontend_health_ca_file,
     },
 
     "backend": {

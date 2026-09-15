@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+import PageBoundary from "./components/PageBoundary";
+
 import CoreNavigation, {
   type CorePage,
 } from "./components/CoreNavigation";
@@ -91,11 +93,13 @@ export default function CoreConsole() {
         visible={page === "dashboard"}
         onVoiceAgentStateChange={updateVoiceAgentState}
       />
+      <PageBoundary key={page}>
       {page === "processing" && <ProcessingPage />}
       {page === "systems" && <SystemsPage />}
       {page === "services" && <ServicesPage />}
       {page === "incidents" && <IncidentsPage />}
       {page === "memory" && <MemoryPage />}
+      </PageBoundary>
     </>
   );
 }

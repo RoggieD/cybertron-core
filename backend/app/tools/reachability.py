@@ -1,6 +1,8 @@
 import asyncio
 import json
 import shutil
+import ssl
+from pathlib import Path
 import subprocess
 import time
 from urllib.parse import urlparse
@@ -11,11 +13,19 @@ import httpx
 async def _check_http(
     url: str,
     timeout: float = 5.0,
+    ca_file: str | None = None,
 ) -> dict:
     started = time.perf_counter()
 
     try:
+        verify = ssl.create_default_context()
+        if ca_file and Path(ca_file).is_file():
+            verify.load_verify_locations(cafile=ca_file)
+            # Explicitly trust the configured local certificate, including a
+            # development leaf signed by a private CA. Hostname checks remain on.
+            verify.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
         async with httpx.AsyncClient(
+            verify=verify,
             follow_redirects=True,
             timeout=timeout,
         ) as client:
@@ -218,6 +228,7 @@ async def network_reachability(
     container: str | None = None,
     protocol: str = "http",
     path: str = "/",
+    ca_file: str | None = None,
 ) -> dict:
     if container and port:
         result = await _check_docker_service(
@@ -236,7 +247,7 @@ async def network_reachability(
         parsed = urlparse(target)
 
         if parsed.scheme in {"http", "https"}:
-            result = await _check_http(target)
+            result = await _check_http(target, ca_file=ca_file)
 
             if service_name:
                 result["service_name"] = service_name

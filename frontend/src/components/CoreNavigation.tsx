@@ -50,10 +50,9 @@ export default function CoreNavigation({
 
   return (
     <nav className="core-navigation" aria-label="C.O.R.E. console navigation">
-      <div className="core-navigation-brand">
-        <span>CYBERTRON</span>
-        <strong>C.O.R.E.</strong>
-      </div>
+      <button type="button" className="core-navigation-brand" onClick={() => onNavigate("/")} aria-label="CyberTron home">
+        <img src="/cybertron-core-logo.png" alt="CyberTron C.O.R.E." />
+      </button>
 
       <div className="core-navigation-controls">
         <div className="core-navigation-links">

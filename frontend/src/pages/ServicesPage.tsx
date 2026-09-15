@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 
 import {
   getServiceStatus,
-  getStatusOverview,
   type ServiceHealthItem,
-  type StatusOverview,
 } from "../api/status";
 
 import "../styles.css";
 
 export default function ServicesPage() {
-  const [overview, setOverview] = useState<StatusOverview | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [services, setServices] = useState<ServiceHealthItem[]>([]);
   const [selectedService, setSelectedService] =
     useState<ServiceHealthItem | null>(null);
@@ -23,14 +21,9 @@ export default function ServicesPage() {
 
     const refresh = async () => {
       try {
-        const [status, serviceData] = await Promise.all([
-          getStatusOverview(),
-          getServiceStatus(),
-        ]);
-
+        const serviceData = await getServiceStatus();
         if (!active) return;
-
-        setOverview(status);
+        setLoaded(true);
         setServices(serviceData.services);
         setError(false);
 
@@ -65,6 +58,7 @@ export default function ServicesPage() {
     try {
       const serviceData = await getServiceStatus();
       setServices(serviceData.services);
+      setLoaded(true);
 
       const refreshed =
         serviceData.services.find(
@@ -94,14 +88,16 @@ export default function ServicesPage() {
       </section>
 
       <section className="service-health-panel">
+        <p className="subtitle">Reachability is checked from the backend. Select a service for its target, response and any check error.</p>
+        {error && <p role="alert">Service checks are unavailable. Displayed results may be out of date.</p>}
         <div className="service-health-header">
           <div>
             <span>SERVICE MATRIX</span>
             <strong>
               {error
                 ? "LINK ERROR"
-                : overview
-                  ? `${overview.services.reachable}/${overview.services.total} OPERATIONAL`
+                : loaded
+                  ? `${services.filter(service => service.reachable).length}/${services.length} REACHABLE`
                   : "ACQUIRING..."}
             </strong>
           </div>
@@ -120,7 +116,7 @@ export default function ServicesPage() {
               onClick={() => setSelectedService(service)}
             >
               <span>{service.name}</span>
-              <strong>{service.reachable ? "ONLINE" : "OFFLINE"}</strong>
+              <strong>{service.reachable ? "REACHABLE" : "CHECK FAILED"}</strong>
               <small>
                 {service.scope.toUpperCase()}
                 {typeof service.latency_ms === "number"
@@ -163,7 +159,7 @@ export default function ServicesPage() {
                 <strong
                   className={selectedService.reachable ? "online" : "warning"}
                 >
-                  {selectedService.reachable ? "ONLINE" : "OFFLINE"}
+                  {selectedService.reachable ? "REACHABLE" : "CHECK FAILED"}
                 </strong>
               </div>
 

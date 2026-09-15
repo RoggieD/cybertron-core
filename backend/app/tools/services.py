@@ -66,6 +66,7 @@ async def _check_service(service: dict) -> dict:
     else:
         result = await network_reachability(
             target=service["target"],
+            ca_file=service.get("ca_file"),
             service_name=name,
         )
 

@@ -859,33 +859,18 @@ export default function DashboardPage({
 
   return (
     <main className={`core-shell ${visible ? "" : "core-shell-controller-hidden"}`}>
-      <section className="header">
+      <section className="header dashboard-hero">
         <p className="eyebrow">CYBERTRON SYSTEMS</p>
         <h1>
-          CyberTron <span>C.O.R.E.</span>
+          CyberTron<br /><span>Orchestration &amp; Reasoning Engine</span>
         </h1>
-        <p className="subtitle">CyberTron Orchestration &amp; Reasoning Engine</p>
+        <p className="subtitle">Local intelligence. On your terms.</p>
       </section>
 
-      <section
-        className={`reactor-panel reactor-${displayedReactorState.toLowerCase()} telemetry-${telemetryState.toLowerCase()}`}
-      >
-        <div className="reactor">
-          <div className="reactor-core" />
-          <div className="reactor-ring ring-one" />
-          <div className="reactor-ring ring-two" />
-          <div className="reactor-ring ring-three" />
-        </div>
-
-        <div className="state-label">
-          {displayedReactorState}
-          {displayedReactorState === "IDLE" && (
-            <span className={`reactor-health telemetry-${telemetryState.toLowerCase()}`}>
-              {" "}• {telemetryState}
-            </span>
-          )}
-        </div>
-      </section>
+      <div className="dashboard-runtime" role="status">
+        <span>AGENT <strong>{displayedReactorState}</strong></span>
+        <span>TELEMETRY <strong>{overviewError ? "UNAVAILABLE" : overview ? telemetryState : "CONNECTING"}</strong></span>
+      </div>
 
       <section className="conversation-panel">
         <form className="prompt-form" onSubmit={handleSubmit}>

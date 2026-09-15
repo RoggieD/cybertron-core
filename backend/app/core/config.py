@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     ollama_base_url: str = "http://localhost:11434"
+    frontend_health_url: str = "https://localhost:5173"
+    frontend_health_ca_file: str = "certs/cybertron-core.pem"
     ollama_num_predict: int = 4096
     ollama_num_ctx: int = 32768
     kokoro_base_url: str = "http://localhost:8880/v1"
