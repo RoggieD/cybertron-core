@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
+from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
 
 
 ConversationExchange = dict[str, str]
@@ -59,4 +60,6 @@ def format_conversation_context() -> str:
         lines.append(f"USER: {exchange['prompt']}")
         lines.append(f"ASSISTANT: {exchange['response']}")
 
-    return "\n".join(lines)
+    context = "\n".join(lines)
+    budget = allocate_context_budget()["conversation"]
+    return trim_to_token_budget(context, budget, keep="end")
