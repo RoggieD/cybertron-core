@@ -20,6 +20,26 @@ def test_tool_completed_becomes_verified_episode():
     assert '"running": 11' in episode["outcome"]
 
 
+def test_docker_inventory_is_compact_summary():
+    event = CoreEvent(
+        event_type="tool.completed",
+        actor={"type": "tool", "id": "docker.inventory"},
+        target={"type": "agent", "id": "infrastructure"},
+        metadata={"result": {"containers": [
+            {"State": "running", "HealthStatus": "healthy", "Labels": "x" * 5000},
+            {"State": "running", "HealthStatus": "none"},
+            {"State": "exited", "HealthStatus": "none"},
+        ]}},
+    )
+    episode = episode_from_event(event)
+    assert episode is not None
+    assert episode["outcome"] == (
+        "Docker inventory completed: 3 total; 2 running; 1 healthy; "
+        "1 running without explicit health status; 1 stopped/exited."
+    )
+    assert "Labels" not in episode["outcome"]
+
+
 def test_model_error_becomes_failed_episode():
     event = CoreEvent(
         event_type="model.error",
