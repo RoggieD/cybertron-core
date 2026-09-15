@@ -12,6 +12,7 @@ from backend.app.memory import (
 from backend.app.memory.short_term import format_conversation_context
 from backend.app.memory.salience import relevance_salience_score
 from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
+from backend.app.knowledge.retrieval import retrieve_knowledge, format_knowledge_context
 
 
 STOPWORDS = {
@@ -259,6 +260,7 @@ def format_memory_context(
     trace_id: str | None = None,
 ) -> str:
     conversation_context = format_conversation_context()
+    knowledge = retrieve_knowledge(message)
     memories = retrieve_memory_context(
         message,
         session_id=session_id,
@@ -301,5 +303,9 @@ def format_memory_context(
         persistent_context = "\n".join(lines)
         budget = allocate_context_budget()["persistent_memory"]
         sections.append(trim_to_token_budget(persistent_context, budget, keep="start"))
+
+    knowledge_context = format_knowledge_context(knowledge)
+    if knowledge_context:
+        sections.append(knowledge_context)
 
     return "\n\n".join(sections)
