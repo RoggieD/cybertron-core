@@ -16,7 +16,9 @@ is linear in stored history. This is lexical retrieval, not semantic search.
 The dedicated episodic slice uses 5% of the prompt budget, taken from persistent
 memory (now 10%). Instructions, tool evidence, conversation and knowledge retain
 their allocations. Complete JSON records are packed under the existing token
-estimate; oversized records are omitted, preserving the warning and provenance.
+estimate; oversized narrative fields become explicitly marked excerpts, preserving
+the warning, valid JSON and complete provenance. Records are omitted only when
+even provenance and minimal excerpts cannot fit. Stored episodes are unchanged.
 Records include episode, current/previous trace and source-event IDs where stored.
 The current request's trace is excluded. Consolidation preserves only the prior
 trace available in the existing schema, not a complete recurrence trace list.

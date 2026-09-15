@@ -89,7 +89,31 @@ def test_whole_records_preserve_warning_and_provenance(store):
     assert format_episodic_context([episode], token_budget=10) == ""
     assert format_episodic_context([episode], token_budget=0) == ""
     oversized = dict(episode, outcome="x" * 10000)
-    assert format_episodic_context([oversized, episode], token_budget=500) == text
+    compact = format_episodic_context([oversized], token_budget=500)
+    assert episode["id"] in compact
+    assert "[TRUNCATED]" in compact
+    assert estimate_tokens(compact) <= 500
+
+
+@pytest.mark.parametrize("narrative", ["Docker report " * 2000, '\u2603"\\\n' * 2000], ids=["long", "escaped"])
+def test_oversized_retrieved_episode_keeps_usable_context(store, narrative):
+    import json
+    from backend.app.memory.context_budget import allocate_context_budget
+    episode = record(store, prompt="Docker " + narrative, outcome=narrative,
+                     metadata={"source_event_id": "event-123", "previous_trace_id": "trace-previous"})
+    matches = retrieve_episodic_context(LIVE_PROMPT, store=store)
+    assert matches == [episode]
+    context = format_episodic_context(matches)
+    assert "without a current tool result" in context
+    assert "NOT CURRENT/LIVE EVIDENCE" in context
+    assert estimate_tokens(context) <= allocate_context_budget()["episodic_memory"]
+    serialized = json.loads(context.splitlines()[-1])
+    assert serialized["summary_truncated"] is True
+    for key in ("id", "trace_id", "timestamp"):
+        assert serialized[key] == episode[key]
+    assert serialized["source_event_id"] == "event-123"
+    assert serialized["previous_trace_id"] == "trace-previous"
+    assert store.get(episode["id"])["outcome"] == episode["outcome"]
 
 
 def test_build_messages_integrates_history_and_keeps_live_rules(store, monkeypatch):
