@@ -7,7 +7,15 @@
       "description": "Local reference material for Ollama runtime, models, API behavior, GPU usage, context, and troubleshooting.",
       "type": "local_directory",
       "path": "data/knowledge/ollama",
-      "triggers": ["ollama", "local model", "11434", "ollama api", "ollama model", "ollama gpu", "ollama context"],
+      "triggers": [
+        "ollama",
+        "local model",
+        "11434",
+        "ollama api",
+        "ollama model",
+        "ollama gpu",
+        "ollama context"
+      ],
       "enabled": true
     },
     {
@@ -16,7 +24,13 @@
       "description": "Reference material for Juniper networking, configuration, troubleshooting, and operations.",
       "type": "chunk_directory",
       "path": "data/knowledge/juniper/chunks",
-      "triggers": ["juniper", "ssg", "junos", "firewall", "screenos"],
+      "triggers": [
+        "juniper",
+        "ssg",
+        "junos",
+        "firewall",
+        "screenos"
+      ],
       "enabled": true
     },
     {
@@ -25,11 +39,57 @@
       "description": "Reference material for Open WebUI configuration, models, RAG, memories, permissions, integrations, troubleshooting, and administration.",
       "type": "chunk_directory",
       "path": "data/knowledge/open-webui/chunks",
-      "triggers": ["open webui", "open-webui", "openwebui", "webui", "rag", "knowledge base", "memories"],
+      "triggers": [
+        "open webui",
+        "open-webui",
+        "openwebui",
+        "webui",
+        "rag",
+        "knowledge base",
+        "memories"
+      ],
       "enabled": true,
-      "score_ignore_terms": ["open", "webui", "open-webui", "openwebui"],
-      "score_phrases": ["knowledge base", "hybrid search", "web search", "document retrieval", "rag troubleshooting"],
-      "score_term_weights": {"rag": 8, "hybrid": 8, "knowledge": 4, "retrieval": 5, "embedding": 5, "embeddings": 5}
+      "score_ignore_terms": [
+        "open",
+        "webui",
+        "open-webui",
+        "openwebui"
+      ],
+      "score_phrases": [
+        "knowledge base",
+        "hybrid search",
+        "web search",
+        "document retrieval",
+        "rag troubleshooting"
+      ],
+      "score_term_weights": {
+        "rag": 8,
+        "hybrid": 8,
+        "knowledge": 4,
+        "retrieval": 5,
+        "embedding": 5,
+        "embeddings": 5
+      },
+      "source_extensions": [
+        ".md",
+        ".mdx"
+      ],
+      "exclude_paths": [
+        "alternatives/",
+        "brand.mdx",
+        "contributing.mdx",
+        "intro.mdx",
+        "license.mdx",
+        "mission.mdx",
+        "sponsorships.mdx",
+        "team.mdx"
+      ],
+      "source_refresh": {
+        "type": "git",
+        "repository": "https://github.com/open-webui/docs.git",
+        "branch": "main",
+        "subdirectory": "docs"
+      }
     }
   ]
 }

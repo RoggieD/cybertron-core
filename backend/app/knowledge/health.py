@@ -7,9 +7,10 @@ import json
 from pathlib import Path
 
 from backend.app.knowledge.retrieval import DEFAULT_REGISTRY, ROOT, TEXT_SUFFIXES
+from backend.app.knowledge.versions import active_path
 
 
-def inspect_kb(kb: dict, *, root: Path = ROOT) -> dict:
+def inspect_kb(kb: dict, *, root: Path = ROOT, use_active: bool = True) -> dict:
     result = {"id": kb.get("id"), "name": kb.get("name"),
               "enabled": kb.get("enabled") is True, "type": kb.get("type", "local_directory"),
               "path": kb.get("path"), "documents": 0, "chunks": 0,
@@ -23,7 +24,8 @@ def inspect_kb(kb: dict, *, root: Path = ROOT) -> dict:
     try:
         if not isinstance(kb.get("path"), str) or not kb["path"].strip():
             raise ValueError("Missing KB path")
-        base = (root / kb["path"]).resolve()
+        base = active_path(kb, root) if use_active else (root / kb["path"]).resolve()
+        result["active_path"] = str(base.relative_to(root.resolve())) if base.is_relative_to(root.resolve()) else "outside repository"
         if not base.is_relative_to(root.resolve()):
             raise ValueError("KB path is outside the repository")
         if not base.is_dir():
@@ -102,7 +104,10 @@ def knowledge_health(*, registry_path: Path = DEFAULT_REGISTRY, root: Path = ROO
                 report["registry_errors"].append(f"Duplicate KB ID: {kb['id']}")
             ids.add(kb["id"])
             if kb_id is None or kb["id"] == kb_id:
-                report["knowledge_bases"].append(inspect_kb(kb, root=root))
+                item = inspect_kb(kb, root=root)
+                from backend.app.knowledge.refresh import refresh_status
+                item["refresh"] = refresh_status(kb, root)
+                report["knowledge_bases"].append(item)
         if kb_id is not None and kb_id not in ids:
             report["registry_errors"].append(f"Unknown KB: {kb_id}")
     except (OSError, UnicodeError, ValueError) as exc:

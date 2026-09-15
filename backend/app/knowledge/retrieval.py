@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from backend.app.knowledge.versions import active_path
+
 from backend.app.memory.context_budget import allocate_context_budget, estimate_tokens
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -129,7 +131,7 @@ def score_fields(
 
 
 def _kb_base(kb: dict) -> Path:
-    return ROOT / str(kb["path"])
+    return active_path(kb, ROOT)
 
 
 def _retrieve_directory(kb: dict, query_words: set[str], query: str) -> list[dict]:
