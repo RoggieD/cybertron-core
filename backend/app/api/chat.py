@@ -398,7 +398,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     metadata={"result": tool_result},
                 )
 
-            if verified_output:
+            if verified_output and not verified_only:
                 yield json.dumps(
                     {
                         "event": "tool.result",

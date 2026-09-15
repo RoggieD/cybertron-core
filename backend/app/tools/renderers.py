@@ -1,3 +1,6 @@
+import re
+
+
 def bytes_to_gib(value: int | None) -> float:
     if not value:
         return 0.0
@@ -276,7 +279,15 @@ def should_return_verified_only(
     }
 
     if tool_id == "docker.inventory":
-        return normalized in docker_requests
+        # Inventory facts come from the tool. Only invoke the model when
+        # the user requests interpretation, not to recount known states.
+        interpretation = re.search(
+            r"\b(why|explain|analy[sz]e|analysis|interpret|diagnos\w*|"
+            r"troubleshoot\w*|recommend\w*|suggest\w*|compare|should|"
+            r"how|fix|resolve|assess\w*|investigate|optimi[sz]\w*)\b",
+            normalized,
+        )
+        return normalized in docker_requests or interpretation is None
 
     if tool_id == "system.snapshot":
         return normalized in system_requests
