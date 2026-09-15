@@ -929,18 +929,18 @@ export default function DashboardPage({
         </div>
 
         <div className="response-panel">
-          {conversationHistory.map((exchange, index) => (
-            <section key={index}>
-              <strong>YOU</strong><p>{exchange.prompt}</p>
-              <strong>C.O.R.E.</strong><p>{exchange.response || "[No response]"}</p>
-            </section>
-          ))}
           {lastRequest && <><strong>YOU</strong><p>{lastRequest}</p><strong>C.O.R.E.</strong></>}
           {responseText ? (
             <p>{responseText}</p>
           ) : (
             <p className="response-placeholder">C.O.R.E. awaiting input.</p>
           )}
+          {conversationHistory.slice().reverse().map((exchange, index) => (
+            <section key={conversationHistory.length - 1 - index}>
+              <strong>YOU</strong><p>{exchange.prompt}</p>
+              <strong>C.O.R.E.</strong><p>{exchange.response || "[No response]"}</p>
+            </section>
+          ))}
         </div>
       </section>
 

@@ -850,12 +850,6 @@ export default function VoiceAgent3D({
             <strong>{agentControlState}</strong>
           </div>
           <div className="voice-agent-conversation-log">
-            {conversationHistory.map((exchange, index) => (
-              <div key={index}>
-                <section><span>YOU</span><p>{exchange.prompt}</p></section>
-                <section><span>C.O.R.E.</span><p>{exchange.response || "[No response]"}</p></section>
-              </div>
-            ))}
             <section>
               <span>YOU / WHISPER</span>
               <p>{lastTranscript || "Awaiting command."}</p>
@@ -864,6 +858,12 @@ export default function VoiceAgent3D({
               <span>C.O.R.E.</span>
               <p>{lastResponse || "Awaiting response."}</p>
             </section>
+            {conversationHistory.slice().reverse().map((exchange, index) => (
+              <div key={conversationHistory.length - 1 - index}>
+                <section><span>YOU</span><p>{exchange.prompt}</p></section>
+                <section><span>C.O.R.E.</span><p>{exchange.response || "[No response]"}</p></section>
+              </div>
+            ))}
           </div>
           <form className="voice-agent-chat-form" onSubmit={submitChat}>
             <input
