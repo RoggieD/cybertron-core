@@ -11,11 +11,13 @@ def test_websocket_connection() -> None:
         connected = websocket.receive_json()
 
         assert connected["event_type"] == "core.connected"
-        assert connected["payload"]["status"] == "online"
+        assert connected["status"] == "online"
+        assert connected["metadata"]["service"] == "CyberTron C.O.R.E."
 
         websocket.send_text("cybertron-test")
 
         echo = websocket.receive_json()
 
         assert echo["event_type"] == "core.echo"
-        assert echo["payload"]["message"] == "cybertron-test"
+        assert echo["status"] == "complete"
+        assert echo["metadata"]["message"] == "cybertron-test"
