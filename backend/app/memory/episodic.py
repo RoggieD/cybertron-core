@@ -87,10 +87,9 @@ class EpisodicStore:
         created = timestamp or datetime.now(timezone.utc).isoformat()
         normalized_tags = sorted({str(tag).strip().lower() for tag in (tags or []) if str(tag).strip()})
         metadata_value = dict(metadata or {})
+        consolidated_id: str | None = None
 
         with self._connect() as connection:
-            # Consecutive identical operational outcomes consolidate into one
-            # durable episode while trace_events preserve every occurrence.
             previous = connection.execute(
                 """
                 SELECT * FROM episodes
@@ -119,26 +118,26 @@ class EpisodicStore:
                         previous["id"],
                     ),
                 )
-                return self.get(previous["id"]) or {}
+                consolidated_id = previous["id"]
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO episodes (
+                        id, timestamp, session_id, trace_id, agent_id, tool_id,
+                        prompt, outcome, status, importance, pain_score,
+                        recurrence_count, tags_json, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        episode_id, created, session_id, trace_id, agent_id, tool_id,
+                        prompt, outcome, status,
+                        max(0, min(10, int(importance))), max(0, min(10, int(pain_score))),
+                        max(1, int(recurrence_count)), json.dumps(normalized_tags),
+                        json.dumps(metadata_value, sort_keys=True),
+                    ),
+                )
 
-            connection.execute(
-                """
-                INSERT INTO episodes (
-                    id, timestamp, session_id, trace_id, agent_id, tool_id,
-                    prompt, outcome, status, importance, pain_score,
-                    recurrence_count, tags_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    episode_id, created, session_id, trace_id, agent_id, tool_id,
-                    prompt, outcome, status,
-                    max(0, min(10, int(importance))), max(0, min(10, int(pain_score))),
-                    max(1, int(recurrence_count)), json.dumps(normalized_tags),
-                    json.dumps(metadata_value, sort_keys=True),
-                ),
-            )
-
-        return self.get(episode_id) or {}
+        return self.get(consolidated_id or episode_id) or {}
 
     def get(self, episode_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
