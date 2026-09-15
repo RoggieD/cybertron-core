@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,10 +23,21 @@ from backend.app.memory.middleware import ConversationMemoryMiddleware
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await start_sampler()
+    try:
+        yield
+    finally:
+        await stop_sampler()
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.0.1",
     description="CyberTron Orchestration & Reasoning Engine",
+    lifespan=lifespan,
 )
 
 app.add_middleware(ConversationMemoryMiddleware)
@@ -52,16 +65,6 @@ app.include_router(security_router)
 app.include_router(voice_router)
 app.include_router(agents_router)
 app.include_router(websocket_router)
-
-
-@app.on_event("startup")
-async def telemetry_startup() -> None:
-    await start_sampler()
-
-
-@app.on_event("shutdown")
-async def telemetry_shutdown() -> None:
-    await stop_sampler()
 
 
 @app.get("/")
