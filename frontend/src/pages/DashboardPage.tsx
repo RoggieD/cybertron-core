@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { getHealth } from "../api/core";
 import { getStatusOverview, type StatusOverview } from "../api/status";
-import { streamChat, type StreamEvent } from "../api/chat";
+import { streamChat, cancelChat, type StreamEvent } from "../api/chat";
 import {
   getSttStatus,
   getVoiceStatus,
@@ -184,6 +184,9 @@ export default function DashboardPage({
 
   const [prompt, setPrompt] = useState("");
   const requestRef = useRef<AbortController | null>(null);
+  const cancelTokenRef = useRef("");
+  const cancelWantedRef = useRef(false);
+  const cancelInFlightRef = useRef(false);
   const [requestPending, setRequestPending] = useState(false);
   const speechGenerationRef = useRef(0);
   const microphoneStartingRef = useRef(false);
@@ -431,6 +434,8 @@ export default function DashboardPage({
     if (!trimmed || requestRef.current || recorderRef.current || microphoneStartingRef.current || voiceState === "TRANSCRIBING") return;
     const controller = new AbortController();
     requestRef.current = controller;
+    cancelTokenRef.current = "";
+    cancelWantedRef.current = false;
     setRequestPending(true);
     if (audioRef.current || voiceState === "SPEAKING") stopSpeaking();
 
@@ -450,6 +455,15 @@ export default function DashboardPage({
     try {
       await streamChat(trimmed, (streamEvent: StreamEvent) => {
         if (controller.signal.aborted) return;
+        if (streamEvent.event === "request.accepted") {
+          cancelTokenRef.current = streamEvent.cancel_token ?? "";
+          if (cancelWantedRef.current) void cancelCurrentRequest();
+        }
+        if (streamEvent.event === "request.cancelled") {
+          controller.abort();
+          return;
+        }
+        if (streamEvent.event === "request.failed") throw new Error("Backend request failed.");
         if (streamEvent.model) setActiveModel(streamEvent.model);
 
         const eventWithAgent = streamEvent as StreamEvent & {
@@ -502,7 +516,32 @@ export default function DashboardPage({
       );
     } finally {
       requestRef.current = null;
+      cancelTokenRef.current = "";
       setRequestPending(false);
+    }
+  }
+
+  async function cancelCurrentRequest() {
+    const controller = requestRef.current;
+    if (!controller || cancelInFlightRef.current) return;
+    cancelWantedRef.current = true;
+    if (!cancelTokenRef.current) return;
+    cancelInFlightRef.current = true;
+    try {
+      const status = await cancelChat(cancelTokenRef.current);
+      if (requestRef.current !== controller) return;
+      if (status === "cancelled") {
+        stopSpeaking();
+        controller.abort();
+      } else {
+        setResponseText((current) => `${current}\n\n[Backend request already ${status}]`);
+      }
+    } catch (error) {
+      if (requestRef.current === controller) {
+        setResponseText((current) => `${current}\n\n[${error instanceof Error ? error.message : "Cancel failed; retry CANCEL."}]`);
+      }
+    } finally {
+      cancelInFlightRef.current = false;
     }
   }
 
@@ -711,8 +750,7 @@ export default function DashboardPage({
       const detail = (event as CustomEvent<{ action?: string; message?: string }>).detail;
       const action = detail?.action;
       if (action === "cancel") {
-        requestRef.current?.abort();
-        stopSpeaking();
+        void cancelCurrentRequest();
         return;
       }
 

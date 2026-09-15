@@ -3,6 +3,7 @@ import asyncio
 from contextlib import aclosing
 import anyio
 from uuid import uuid4
+from secrets import token_urlsafe
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -23,6 +24,30 @@ from backend.app.tools.renderers import (
 from backend.app.memory.context import format_memory_context
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# Opaque capability tokens are returned only to the initiating stream, never
+# broadcast in traces. This registry is process-local (single-worker runtime).
+active_requests: dict[str, dict] = {}
+
+
+class CancelRequest(BaseModel):
+    token: str
+
+
+@router.post("/cancel")
+async def cancel_request(request: CancelRequest) -> dict:
+    entry = active_requests.get(request.token)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    task = entry["task"]
+    if not task.done() and not entry["cancel_requested"]:
+        entry["cancel_requested"] = True
+        task.cancel()
+    try:
+        await asyncio.wait_for(asyncio.shield(entry["finished"].wait()), 10)
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=409, detail="Cancellation still pending") from exc
+    return {"status": entry["status"]}
 
 
 class ChatRequest(BaseModel):
@@ -544,7 +569,54 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     metadata={"agent_id": agent.id, "model": model},
                 )
 
+    async def controlled_stream():
+        token = token_urlsafe(32)
+        queue = asyncio.Queue()
+        entry = {"task": None, "cancel_requested": False,
+                 "finished": asyncio.Event(), "status": "running"}
+
+        async def produce():
+            try:
+                async with aclosing(lifecycle_stream()) as stream:
+                    async for line in stream:
+                        if json.loads(line).get("event") == "model.error":
+                            entry["status"] = "failed"
+                        await queue.put(line)
+                if entry["status"] == "running":
+                    entry["status"] = "completed"
+            except asyncio.CancelledError:
+                entry["status"] = "cancelled"
+            except Exception:
+                entry["status"] = "failed"
+            finally:
+                entry["finished"].set()
+                queue.put_nowait(None)
+
+        task = asyncio.create_task(produce())
+        entry["task"] = task
+        active_requests[token] = entry
+        try:
+            # Allow the producer to start before advertising cancellation.
+            await asyncio.sleep(0)
+            yield json.dumps({"event": "request.accepted", "cancel_token": token,
+                              "trace_id": trace_id}) + "\n"
+            while True:
+                line = await queue.get()
+                if line is None:
+                    break
+                yield line
+            yield json.dumps({"event": "request." + entry["status"]}) + "\n"
+        finally:
+            if not task.done():
+                if not entry["cancel_requested"]:
+                    entry["cancel_requested"] = True
+                    task.cancel()
+                with anyio.CancelScope(shield=True):
+                    await task
+            # Briefly retain the outcome for cancel/completion races.
+            asyncio.get_running_loop().call_later(60, active_requests.pop, token, None)
+
     return StreamingResponse(
-        lifecycle_stream(),
+        controlled_stream(),
         media_type="application/x-ndjson",
     )

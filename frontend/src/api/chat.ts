@@ -1,4 +1,5 @@
 export interface StreamEvent {
+  cancel_token?: string;
   event: string;
   model?: string;
   content?: string;
@@ -10,6 +11,17 @@ export interface StreamEvent {
   error?: string;
   tool?: string;
   verified?: boolean;
+}
+
+export async function cancelChat(token: string): Promise<string> {
+  const response = await fetch("/api/chat/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new Error(`Cancellation not acknowledged (${response.status}). Retry CANCEL.`);
+  return (await response.json()).status;
 }
 
 export async function streamChat(
