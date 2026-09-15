@@ -7,7 +7,7 @@ from backend.app.tools.overview import system_overview
 from backend.app.tools.services import service_status
 from backend.app.tools.reachability import network_reachability
 from backend.app.tools.base import ToolDefinition
-from backend.app.tools.docker import docker_inventory, docker_inspect
+from backend.app.tools.docker import docker_inventory, docker_inspect, docker_health_summary
 from backend.app.tools.system import system_snapshot
 from backend.app.tools.processes import process_inventory
 from backend.app.tools.network import network_interfaces
@@ -161,6 +161,17 @@ TOOLS = {
         permission_level=0,
         read_only=True,
         handler=docker_inventory,
+    ),
+    "docker.health_summary": ToolDefinition(
+        id="docker.health_summary",
+        name="Docker Health Summary",
+        description=(
+            "Read-only classification of Docker containers by explicit health, "
+            "unspecified health, and stopped state."
+        ),
+        permission_level=0,
+        read_only=True,
+        handler=docker_health_summary,
     ),
 }
 
