@@ -28,6 +28,7 @@ Thumbs.db
 *.log
 data/
 !data/
+data/*
 !data/knowledge/
 !data/knowledge/**
 tmp/
