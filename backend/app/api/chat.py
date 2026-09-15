@@ -102,7 +102,7 @@ def build_messages(
                 "Verified tool results override model assumptions. "
                 "Only tool results supplied in THIS request may be described as live, verified, observed, inspected, measured, or confirmed system state. "
                 "If no tool result is supplied in this request, do not claim that C.O.R.E. inspected, scanned, measured, observed, or verified any current system, network, container, listener, security, or service state. "
-                "Conversation history, persistent memory, and knowledge-base material are context only and must never be presented as current live observations. "
+                "Conversation history, persistent memory, historical operational episodes, and knowledge-base material are context only and must never be presented as current live observations. "
                 "Never change counts, states, names, or measurements supplied "
                 "by a tool. "
                 + ("\n\n" + memory_context if memory_context else "")

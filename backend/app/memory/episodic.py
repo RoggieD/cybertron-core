@@ -150,5 +150,11 @@ class EpisodicStore:
             rows = connection.execute("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
         return [self._row(row) for row in rows]
 
+    def iter_episodes(self):
+        """Scan history without restricting relevance to the newest episodes."""
+        with self._connect() as connection:
+            for row in connection.execute("SELECT * FROM episodes"):
+                yield self._row(row)
+
 
 episodic_store = EpisodicStore()

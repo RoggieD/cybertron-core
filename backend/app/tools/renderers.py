@@ -1,5 +1,7 @@
 import re
 
+from backend.app.memory.episodic_retrieval import RECALL
+
 
 def bytes_to_gib(value: int | None) -> float:
     if not value:
@@ -281,6 +283,8 @@ def should_return_verified_only(
     if tool_id == "docker.inventory":
         # Inventory facts come from the tool. Only invoke the model when
         # the user requests interpretation, not to recount known states.
+        if RECALL.search(message):
+            return False
         interpretation = re.search(
             r"\b(why|explain|analy[sz]e|analysis|interpret|diagnos\w*|"
             r"troubleshoot\w*|recommend\w*|suggest\w*|compare|should|"

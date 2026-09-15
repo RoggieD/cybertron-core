@@ -76,7 +76,8 @@ def allocate_context_budget(
         "instructions": int(prompt * 0.20),
         "tool_evidence": int(prompt * 0.30),
         "conversation": int(prompt * 0.25),
-        "persistent_memory": int(prompt * 0.15),
+        "persistent_memory": int(prompt * 0.10),
+        "episodic_memory": int(prompt * 0.05),
     }
     allocations["knowledge"] = max(0, prompt - sum(allocations.values()))
     allocations["prompt_total"] = prompt

@@ -10,6 +10,7 @@ from backend.app.memory import (
     MemoryStore,
 )
 from backend.app.memory.short_term import format_conversation_context
+from backend.app.memory.episodic_retrieval import retrieve_episodic_context, format_episodic_context
 from backend.app.memory.salience import relevance_salience_score
 from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
 from backend.app.knowledge.retrieval import retrieve_knowledge, format_knowledge_context
@@ -268,6 +269,9 @@ def format_memory_context(
     )
 
     sections = []
+    episodic_context = format_episodic_context(
+        retrieve_episodic_context(message, trace_id=trace_id)
+    )
     if conversation_context:
         sections.append(conversation_context)
 
@@ -305,6 +309,8 @@ def format_memory_context(
         sections.append(trim_to_token_budget(persistent_context, budget, keep="start"))
 
     knowledge_context = format_knowledge_context(knowledge)
+    if episodic_context:
+        sections.append(episodic_context)
     if knowledge_context:
         sections.append(knowledge_context)
 

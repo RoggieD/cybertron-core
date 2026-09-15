@@ -20,6 +20,7 @@ def test_allocations_fit_exactly_inside_prompt_budget():
         + allocation["tool_evidence"]
         + allocation["conversation"]
         + allocation["persistent_memory"]
+        + allocation["episodic_memory"]
         + allocation["knowledge"]
     )
     assert parts == allocation["prompt_total"] == 24576
