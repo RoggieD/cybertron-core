@@ -1,4 +1,7 @@
 import json
+import asyncio
+from contextlib import aclosing
+import anyio
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -515,7 +518,33 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 }
             ) + "\n"
 
+    async def lifecycle_stream():
+        terminal = "request.failed"
+        try:
+            async with aclosing(event_stream()) as stream:
+                async for line in stream:
+                    event = json.loads(line)
+                    if event.get("event") == "model.error":
+                        terminal = "request.failed"
+                        yield line
+                        return
+                    yield line
+            terminal = "request.completed"
+        except (asyncio.CancelledError, GeneratorExit):
+            terminal = "request.cancelled"
+            raise
+        finally:
+            # Starlette cancels the streaming task when the client disconnects.
+            # Shield only the terminal audit write, never inference/tool work.
+            with anyio.CancelScope(shield=True):
+                await publish(
+                    terminal,
+                    actor={"type": "core", "id": "cybertron"},
+                    status=terminal.split(".")[1],
+                    metadata={"agent_id": agent.id, "model": model},
+                )
+
     return StreamingResponse(
-        event_stream(),
+        lifecycle_stream(),
         media_type="application/x-ndjson",
     )

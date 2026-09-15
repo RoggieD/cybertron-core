@@ -26,6 +26,7 @@ type ReactorState =
   | "THINKING"
   | "COMPLETE"
   | "ERROR";
+// Request ownership is independent of broadcast telemetry.
 
 type VoiceState =
   | "READY"
@@ -182,6 +183,10 @@ export default function DashboardPage({
   const [overviewError, setOverviewError] = useState(false);
 
   const [prompt, setPrompt] = useState("");
+  const requestRef = useRef<AbortController | null>(null);
+  const [requestPending, setRequestPending] = useState(false);
+  const speechGenerationRef = useRef(0);
+  const microphoneStartingRef = useRef(false);
   const [lastRequest, setLastRequest] = useState("");
   const [responseText, setResponseText] = useState("");
   const [reactorState, setReactorState] = useState<ReactorState>("IDLE");
@@ -257,6 +262,8 @@ export default function DashboardPage({
 
     return () => {
       stopVoiceActivityDetection();
+      requestRef.current?.abort();
+      speechGenerationRef.current += 1;
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       recorderRef.current = null;
@@ -356,6 +363,8 @@ export default function DashboardPage({
   }, []);
 
   function stopSpeaking() {
+    speechGenerationRef.current += 1;
+    setVoiceState("READY");
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -368,6 +377,7 @@ export default function DashboardPage({
   }
 
   async function speak(text: string) {
+    const generation = ++speechGenerationRef.current;
     // Preserve the verified heading until the tool-aware speech formatter has
     // classified the result. Generic model replies still use concise sections.
     const speechText = hasVerifiedToolHeader(text) ? text : selectSpeechText(text);
@@ -376,6 +386,7 @@ export default function DashboardPage({
     try {
       setVoiceState("SPEAKING");
       const blob = await synthesizeSpeech(speechText);
+      if (generation !== speechGenerationRef.current) return;
       const url = URL.createObjectURL(blob);
 
       if (audioRef.current) {
@@ -417,7 +428,11 @@ export default function DashboardPage({
 
   async function processMessage(message: string) {
     const trimmed = message.trim();
-    if (!trimmed) return;
+    if (!trimmed || requestRef.current || recorderRef.current || microphoneStartingRef.current || voiceState === "TRANSCRIBING") return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setRequestPending(true);
+    if (audioRef.current || voiceState === "SPEAKING") stopSpeaking();
 
     setPrompt(trimmed);
     setLastRequest(trimmed);
@@ -434,6 +449,7 @@ export default function DashboardPage({
 
     try {
       await streamChat(trimmed, (streamEvent: StreamEvent) => {
+        if (controller.signal.aborted) return;
         if (streamEvent.model) setActiveModel(streamEvent.model);
 
         const eventWithAgent = streamEvent as StreamEvent & {
@@ -467,18 +483,26 @@ export default function DashboardPage({
         }
 
         if (streamEvent.event === "model.error") {
-          setReactorState("ERROR");
-          finalResponse = streamEvent.error ?? "Unknown model streaming error.";
-          setResponseText(finalResponse);
+          throw new Error(streamEvent.error ?? "Unknown model streaming error.");
         }
-      }, agentMode);
+      }, agentMode, controller.signal);
 
+      controller.signal.throwIfAborted();
+      setReactorState("COMPLETE");
       if (finalResponse) await speak(finalResponse);
     } catch (error) {
+      if (controller.signal.aborted) {
+        setReactorState("IDLE");
+        setResponseText((current) => `${current}\n\n[Request cancelled]`);
+        return;
+      }
       setReactorState("ERROR");
       setResponseText(
         error instanceof Error ? error.message : "Unknown request failure.",
       );
+    } finally {
+      requestRef.current = null;
+      setRequestPending(false);
     }
   }
 
@@ -581,12 +605,14 @@ export default function DashboardPage({
   }
 
   async function startListening() {
+    if (requestRef.current || recorderRef.current || microphoneStartingRef.current) return;
     if (!micSupported || !sttReady) {
       setVoiceState("ERROR");
       return;
     }
 
     try {
+      microphoneStartingRef.current = true;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
@@ -664,15 +690,13 @@ export default function DashboardPage({
       mediaStreamRef.current = null;
       recorderRef.current = null;
       setVoiceState("ERROR");
+    } finally {
+      microphoneStartingRef.current = false;
     }
   }
 
   const telemetryState = getTelemetryState(overview, overviewError);
-  const busy =
-    reactorState === "ROUTING" ||
-    reactorState === "AGENT_ACTIVE" ||
-    reactorState === "TOOL_ACTIVE" ||
-    reactorState === "THINKING";
+  const busy = requestPending;
   const displayedReactorState = voiceState === "SPEAKING" ? "SPEAKING" : reactorState;
   const microphoneReady = micSupported && sttReady;
   const voiceEngineOnline = [
@@ -686,6 +710,11 @@ export default function DashboardPage({
     const handleVoiceAction = (event: Event) => {
       const detail = (event as CustomEvent<{ action?: string; message?: string }>).detail;
       const action = detail?.action;
+      if (action === "cancel") {
+        requestRef.current?.abort();
+        stopSpeaking();
+        return;
+      }
 
       if (action === "listen") {
         if (voiceState === "LISTENING") {
@@ -742,12 +771,14 @@ export default function DashboardPage({
       lastTranscript: lastRequest,
       lastResponse: responseText,
       agentMode,
+      requestPending,
     });
   }, [
     activeAgent,
     activeModel,
     activeTool,
     agentMode,
+    requestPending,
     displayedReactorState,
     lastRequest,
     onVoiceAgentStateChange,

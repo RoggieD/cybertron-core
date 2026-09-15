@@ -42,6 +42,7 @@ const INITIAL_VOICE_AGENT_STATE: VoiceAgentRuntimeState = {
   lastTranscript: "",
   lastResponse: "",
   agentMode: "auto",
+  requestPending: false,
 };
 
 export default function CoreConsole() {

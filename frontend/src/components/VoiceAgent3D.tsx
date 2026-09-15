@@ -25,6 +25,7 @@ type VoiceAgent3DProps = {
   lastTranscript?: string;
   lastResponse?: string;
   agentMode?: string;
+  requestPending?: boolean;
 };
 
 export type VoiceAgentRuntimeState = {
@@ -37,6 +38,7 @@ export type VoiceAgentRuntimeState = {
   lastTranscript: string;
   lastResponse: string;
   agentMode: string;
+  requestPending: boolean;
 };
 
 type WidgetPosition = {
@@ -198,7 +200,7 @@ function displayValue(value: string | undefined, fallback: string) {
 }
 
 function sendVoiceAction(
-  action: "listen" | "stop-speaking" | "submit",
+  action: "listen" | "stop-speaking" | "submit" | "cancel",
   message?: string,
 ) {
   window.dispatchEvent(
@@ -217,6 +219,7 @@ export default function VoiceAgent3D({
   lastTranscript = "",
   lastResponse = "",
   agentMode = "auto",
+  requestPending = false,
 }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
@@ -248,9 +251,7 @@ export default function VoiceAgent3D({
   const [agentControlState, setAgentControlState] = useState<"LOADING" | "READY" | "ERROR">(
     "LOADING",
   );
-  const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
-    orchestrationState,
-  );
+  const operationActive = requestPending;
   const operationActiveRef = useRef(operationActive);
   const orchestrationStateRef = useRef(orchestrationState);
   const speechAnalyserRef = useRef<AnalyserNode | null>(speechAnalyser);
@@ -869,6 +870,11 @@ export default function VoiceAgent3D({
         </div>
       )}
       <div className="voice-agent-controls">
+        {requestPending && (
+          <button type="button" onClick={() => sendVoiceAction("cancel")}>
+            CANCEL REQUEST
+          </button>
+        )}
         {voiceState === "SPEAKING" ? (
           <button type="button" onClick={() => sendVoiceAction("stop-speaking")}>
             ■ STOP SPEAKING
