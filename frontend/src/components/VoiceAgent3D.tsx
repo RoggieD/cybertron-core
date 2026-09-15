@@ -14,7 +14,10 @@ export type VoiceVisualState =
   | "OFFLINE"
   | "ERROR";
 
+export type ConversationExchange = { prompt: string; response: string };
+
 type VoiceAgent3DProps = {
+  conversationHistory?: ConversationExchange[];
   active?: boolean;
   activeAgent?: string;
   activeTool?: string;
@@ -29,6 +32,7 @@ type VoiceAgent3DProps = {
 };
 
 export type VoiceAgentRuntimeState = {
+  conversationHistory?: ConversationExchange[];
   activeAgent: string;
   activeTool: string;
   activeModel: string;
@@ -218,6 +222,7 @@ export default function VoiceAgent3D({
   voiceState: controlledVoiceState,
   lastTranscript = "",
   lastResponse = "",
+  conversationHistory = [],
   agentMode = "auto",
   requestPending = false,
 }: VoiceAgent3DProps) {
@@ -845,6 +850,12 @@ export default function VoiceAgent3D({
             <strong>{agentControlState}</strong>
           </div>
           <div className="voice-agent-conversation-log">
+            {conversationHistory.map((exchange, index) => (
+              <div key={index}>
+                <section><span>YOU</span><p>{exchange.prompt}</p></section>
+                <section><span>C.O.R.E.</span><p>{exchange.response || "[No response]"}</p></section>
+              </div>
+            ))}
             <section>
               <span>YOU / WHISPER</span>
               <p>{lastTranscript || "Awaiting command."}</p>

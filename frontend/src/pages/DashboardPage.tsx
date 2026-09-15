@@ -192,6 +192,7 @@ export default function DashboardPage({
   const microphoneStartingRef = useRef(false);
   const [lastRequest, setLastRequest] = useState("");
   const [responseText, setResponseText] = useState("");
+  const [conversationHistory, setConversationHistory] = useState<Array<{ prompt: string; response: string }>>([]);
   const [reactorState, setReactorState] = useState<ReactorState>("IDLE");
 
   const [activeModel, setActiveModel] = useState("UNKNOWN");
@@ -440,6 +441,9 @@ export default function DashboardPage({
     if (audioRef.current || voiceState === "SPEAKING") stopSpeaking();
 
     setPrompt(trimmed);
+    if (lastRequest) {
+      setConversationHistory((history) => [...history, { prompt: lastRequest, response: responseText }]);
+    }
     setLastRequest(trimmed);
     setResponseText("");
     setEvalCount(null);
@@ -775,7 +779,7 @@ export default function DashboardPage({
 
     window.addEventListener("cybertron:voice-action", handleVoiceAction);
     return () => window.removeEventListener("cybertron:voice-action", handleVoiceAction);
-  }, [agentMode, busy, microphoneReady, voiceState]);
+  }, [agentMode, busy, microphoneReady, voiceState, lastRequest, responseText]);
 
   useEffect(() => {
     const handleModelChanged = (event: Event) => {
@@ -808,6 +812,7 @@ export default function DashboardPage({
       voiceState,
       lastTranscript: lastRequest,
       lastResponse: responseText,
+      conversationHistory,
       agentMode,
       requestPending,
     });
@@ -821,6 +826,7 @@ export default function DashboardPage({
     lastRequest,
     onVoiceAgentStateChange,
     responseText,
+    conversationHistory,
     speechAnalyser,
     voiceState,
   ]);
@@ -923,6 +929,13 @@ export default function DashboardPage({
         </div>
 
         <div className="response-panel">
+          {conversationHistory.map((exchange, index) => (
+            <section key={index}>
+              <strong>YOU</strong><p>{exchange.prompt}</p>
+              <strong>C.O.R.E.</strong><p>{exchange.response || "[No response]"}</p>
+            </section>
+          ))}
+          {lastRequest && <><strong>YOU</strong><p>{lastRequest}</p><strong>C.O.R.E.</strong></>}
           {responseText ? (
             <p>{responseText}</p>
           ) : (
