@@ -46,14 +46,10 @@ class EpisodicStore:
                     metadata_json TEXT NOT NULL DEFAULT '{}'
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_episodes_timestamp
-                    ON episodes(timestamp);
-                CREATE INDEX IF NOT EXISTS idx_episodes_trace
-                    ON episodes(trace_id);
-                CREATE INDEX IF NOT EXISTS idx_episodes_tool
-                    ON episodes(tool_id);
-                CREATE INDEX IF NOT EXISTS idx_episodes_status
-                    ON episodes(status);
+                CREATE INDEX IF NOT EXISTS idx_episodes_timestamp ON episodes(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_episodes_trace ON episodes(trace_id);
+                CREATE INDEX IF NOT EXISTS idx_episodes_tool ON episodes(tool_id);
+                CREATE INDEX IF NOT EXISTS idx_episodes_status ON episodes(status);
                 """
             )
 
@@ -90,8 +86,41 @@ class EpisodicStore:
         episode_id = str(uuid.uuid4())
         created = timestamp or datetime.now(timezone.utc).isoformat()
         normalized_tags = sorted({str(tag).strip().lower() for tag in (tags or []) if str(tag).strip()})
+        metadata_value = dict(metadata or {})
 
         with self._connect() as connection:
+            # Consecutive identical operational outcomes consolidate into one
+            # durable episode while trace_events preserve every occurrence.
+            previous = connection.execute(
+                """
+                SELECT * FROM episodes
+                WHERE tool_id IS ? AND agent_id IS ? AND status = ? AND outcome = ?
+                ORDER BY timestamp DESC LIMIT 1
+                """,
+                (tool_id, agent_id, status, outcome),
+            ).fetchone()
+            if previous is not None:
+                previous_metadata = json.loads(previous["metadata_json"] or "{}")
+                previous_metadata["previous_trace_id"] = previous["trace_id"]
+                previous_metadata.update(metadata_value)
+                connection.execute(
+                    """
+                    UPDATE episodes
+                    SET timestamp = ?, session_id = ?, trace_id = ?,
+                        recurrence_count = recurrence_count + 1,
+                        importance = ?, pain_score = ?, tags_json = ?, metadata_json = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        created, session_id, trace_id,
+                        max(int(previous["importance"]), max(0, min(10, int(importance)))),
+                        max(int(previous["pain_score"]), max(0, min(10, int(pain_score)))),
+                        json.dumps(normalized_tags), json.dumps(previous_metadata, sort_keys=True),
+                        previous["id"],
+                    ),
+                )
+                return self.get(previous["id"]) or {}
+
             connection.execute(
                 """
                 INSERT INTO episodes (
@@ -103,10 +132,9 @@ class EpisodicStore:
                 (
                     episode_id, created, session_id, trace_id, agent_id, tool_id,
                     prompt, outcome, status,
-                    max(0, min(10, int(importance))),
-                    max(0, min(10, int(pain_score))),
-                    max(1, int(recurrence_count)),
-                    json.dumps(normalized_tags), json.dumps(metadata or {}, sort_keys=True),
+                    max(0, min(10, int(importance))), max(0, min(10, int(pain_score))),
+                    max(1, int(recurrence_count)), json.dumps(normalized_tags),
+                    json.dumps(metadata_value, sort_keys=True),
                 ),
             )
 
@@ -120,11 +148,8 @@ class EpisodicStore:
     def recent(self, limit: int = 25) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 250))
         with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT * FROM episodes ORDER BY timestamp DESC LIMIT ?", (limit,)
-            ).fetchall()
+            rows = connection.execute("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
         return [self._row(row) for row in rows]
 
 
-# Shared runtime store, matching the existing trace_store pattern.
 episodic_store = EpisodicStore()
