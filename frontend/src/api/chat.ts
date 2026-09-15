@@ -13,6 +13,11 @@ export interface StreamEvent {
   verified?: boolean;
 }
 
+export type ConversationExchange = {
+  prompt: string;
+  response: string;
+};
+
 export async function cancelChat(token: string): Promise<string> {
   const response = await fetch("/api/chat/cancel", {
     method: "POST",
@@ -29,6 +34,7 @@ export async function streamChat(
   onEvent: (event: StreamEvent) => void,
   agentId?: string | null,
   signal?: AbortSignal,
+  history: ConversationExchange[] = [],
 ): Promise<void> {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
@@ -38,6 +44,7 @@ export async function streamChat(
     },
     body: JSON.stringify({
       message,
+      history: history.slice(-12),
       agent_id: agentId && agentId !== "auto" ? agentId : null,
     })
   });
