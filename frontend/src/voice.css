@@ -270,6 +270,43 @@ body.voice-agent-resizing {
   scrollbar-width: thin;
 }
 
+.voice-agent-model-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.voice-agent-model-control label,
+.voice-agent-model-control strong,
+.voice-agent-model-error {
+  font-size: 0.42rem;
+  letter-spacing: 0.1em;
+}
+
+.voice-agent-model-control strong {
+  font-weight: 500;
+  opacity: 0.64;
+}
+
+.voice-agent-model-control select {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: #031014;
+  color: currentColor;
+  padding: 4px 5px;
+  font: inherit;
+  font-size: 0.5rem;
+}
+
+.voice-agent-model-error {
+  margin: -3px 0 7px;
+  color: #ff4d6d;
+}
+
 .voice-agent-conversation section + section {
   margin-top: 10px;
   padding-top: 9px;

@@ -3,6 +3,8 @@ import type { FormEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
+import { getModelState, setActiveModel } from "../api/models";
+
 export type VoiceVisualState =
   | "READY"
   | "LISTENING"
@@ -232,6 +234,12 @@ export default function VoiceAgent3D({
   const [minimized, setMinimized] = useState(() => storedMinimized());
   const [conversationOpen, setConversationOpen] = useState(() => storedConversationOpen());
   const [chatInput, setChatInput] = useState("");
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState(activeModel ?? "");
+  const [modelControlState, setModelControlState] = useState<
+    "LOADING" | "READY" | "SWITCHING" | "ERROR"
+  >("LOADING");
+  const [modelControlError, setModelControlError] = useState("");
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
@@ -300,6 +308,26 @@ export default function VoiceAgent3D({
       String(conversationOpen),
     );
   }, [conversationOpen]);
+
+  useEffect(() => {
+    let mounted = true;
+    void getModelState()
+      .then((state) => {
+        if (!mounted) return;
+        setModelOptions(state.available_models);
+        setSelectedModel(state.active_model);
+        setModelControlState("READY");
+        setModelControlError("");
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setModelControlState("ERROR");
+        setModelControlError(error instanceof Error ? error.message : "Model control unavailable.");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -651,6 +679,30 @@ export default function VoiceAgent3D({
     setChatInput("");
   }
 
+  async function changeModel(model: string) {
+    if (!model || operationActive || model === selectedModel) return;
+    const previous = selectedModel;
+    setSelectedModel(model);
+    setModelControlState("SWITCHING");
+    setModelControlError("");
+
+    try {
+      const state = await setActiveModel(model);
+      setSelectedModel(state.active_model);
+      setModelOptions(state.available_models);
+      setModelControlState("READY");
+      window.dispatchEvent(
+        new CustomEvent("cybertron:model-changed", {
+          detail: { model: state.active_model },
+        }),
+      );
+    } catch (error) {
+      setSelectedModel(previous);
+      setModelControlState("ERROR");
+      setModelControlError(error instanceof Error ? error.message : "Model switch failed.");
+    }
+  }
+
   if (!active) return null;
 
   return (
@@ -719,6 +771,33 @@ export default function VoiceAgent3D({
       <div ref={mountRef} className="voice-agent-canvas" aria-hidden="true" />
       {conversationOpen && (
         <div className="voice-agent-conversation" aria-live="polite">
+          <div className="voice-agent-model-control">
+            <label htmlFor="voice-agent-model">ACTIVE MODEL</label>
+            <select
+              id="voice-agent-model"
+              value={selectedModel}
+              onChange={(event) => void changeModel(event.target.value)}
+              disabled={
+                operationActive ||
+                modelControlState === "LOADING" ||
+                modelControlState === "SWITCHING" ||
+                modelOptions.length === 0
+              }
+            >
+              {modelOptions.length === 0 && (
+                <option value={selectedModel}>{selectedModel || "UNAVAILABLE"}</option>
+              )}
+              {modelOptions.map((model) => (
+                <option key={model} value={model}>{model}</option>
+              ))}
+            </select>
+            <strong>{modelControlState}</strong>
+          </div>
+          {modelControlError && (
+            <div className="voice-agent-model-error" title={modelControlError}>
+              MODEL CONTROL ERROR
+            </div>
+          )}
           <div className="voice-agent-conversation-log">
             <section>
               <span>YOU / WHISPER</span>

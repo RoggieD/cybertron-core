@@ -701,6 +701,15 @@ export default function DashboardPage({
   }, [busy, microphoneReady, voiceState]);
 
   useEffect(() => {
+    const handleModelChanged = (event: Event) => {
+      const model = (event as CustomEvent<{ model?: string }>).detail?.model;
+      if (model) setActiveModel(model);
+    };
+    window.addEventListener("cybertron:model-changed", handleModelChanged);
+    return () => window.removeEventListener("cybertron:model-changed", handleModelChanged);
+  }, []);
+
+  useEffect(() => {
     onVoiceAgentStateChange?.({
       activeAgent,
       activeTool,
