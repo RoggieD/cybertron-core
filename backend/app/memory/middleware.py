@@ -4,6 +4,10 @@ import asyncio
 import json
 
 from backend.app.memory.conversation import capture_user_memory
+from backend.app.memory.short_term import (
+    reset_conversation_history,
+    set_conversation_history,
+)
 
 
 def extract_user_message(payload):
@@ -71,8 +75,11 @@ class ConversationMemoryMiddleware:
             if not event.get("more_body", False):
                 break
 
+        payload = None
+        history_token = None
         try:
             payload = json.loads(body.decode("utf-8"))
+            history_token = set_conversation_history(payload.get("history"))
             message = extract_user_message(payload)
 
             if message:
@@ -102,4 +109,8 @@ class ConversationMemoryMiddleware:
             # response body iterator immediately after the request is replayed.
             return await receive()
 
-        await self.app(scope, replay, send)
+        try:
+            await self.app(scope, replay, send)
+        finally:
+            if history_token is not None:
+                reset_conversation_history(history_token)
