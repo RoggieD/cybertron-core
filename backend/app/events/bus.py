@@ -4,6 +4,8 @@ from fastapi import WebSocket
 
 from backend.app.events.schema import CoreEvent
 from backend.app.traces.store import trace_store
+from backend.app.memory.episode_capture import capture_episode
+from backend.app.memory.episode_events import episode_from_event
 
 
 class EventBus:
@@ -36,6 +38,11 @@ class EventBus:
         if event.event_type != "model.token":
             await trace_store.save(event)
 
+        episode = episode_from_event(event)
+        if episode is not None:
+            # Episodic persistence must not block the async event bus on SQLite.
+            await asyncio.to_thread(capture_episode, **episode)
+
         payload = event.model_dump(mode="json")
 
         async with self._lock:
@@ -51,9 +58,7 @@ class EventBus:
                     payload
                 )
             except Exception:
-                dead_connections.append(
-                    websocket
-                )
+                dead_connections.append(websocket)
 
         if dead_connections:
             async with self._lock:
