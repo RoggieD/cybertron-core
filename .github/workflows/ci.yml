@@ -1,0 +1,54 @@
+name: CyberTron CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run all backend tests
+        run: python -m pytest backend/tests -q
+
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # Preserve the existing lockfile. It currently lacks a declared dependency;
+      # see docs/continuous-integration.md before switching this step to npm ci.
+      - name: Install frontend dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Run frontend tests
+        run: node --test tests/*.test.mjs
+      - name: Type-check and build production frontend
+        run: npm run build
+      - name: Check lockfile was not modified
+        run: git diff --exit-code -- package-lock.json

@@ -9,10 +9,10 @@ const repoRoot = path.resolve(configDir, "..");
 const certFile = path.join(repoRoot, "certs", "cybertron-core.pem");
 const keyFile = path.join(repoRoot, "certs", "cybertron-core-key.pem");
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
 
-  server: {
+  server: command === "serve" ? {
     host: "0.0.0.0",
     port: 5173,
     https: {
@@ -31,5 +31,5 @@ export default defineConfig({
         ws: true,
       },
     },
-  },
-});
+  } : undefined,
+}));
