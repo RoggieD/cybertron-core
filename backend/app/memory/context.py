@@ -11,6 +11,7 @@ from backend.app.memory import (
 )
 from backend.app.memory.short_term import format_conversation_context
 from backend.app.memory.salience import relevance_salience_score
+from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
 
 
 STOPWORDS = {
@@ -297,6 +298,8 @@ def format_memory_context(
                 f"source: {memory.get('source') or 'unknown'})"
             )
 
-        sections.append("\n".join(lines))
+        persistent_context = "\n".join(lines)
+        budget = allocate_context_budget()["persistent_memory"]
+        sections.append(trim_to_token_budget(persistent_context, budget, keep="start"))
 
     return "\n\n".join(sections)
