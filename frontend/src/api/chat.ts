@@ -14,14 +14,18 @@ export interface StreamEvent {
 
 export async function streamChat(
   message: string,
-  onEvent: (event: StreamEvent) => void
+  onEvent: (event: StreamEvent) => void,
+  agentId?: string | null,
 ): Promise<void> {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ message })
+    body: JSON.stringify({
+      message,
+      agent_id: agentId && agentId !== "auto" ? agentId : null,
+    })
   });
 
   if (!response.ok) {

@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
 import { getModelState, setActiveModel } from "../api/models";
+import { getAgents, type AgentSummary } from "../api/agents";
 
 export type VoiceVisualState =
   | "READY"
@@ -23,6 +24,7 @@ type VoiceAgent3DProps = {
   voiceState?: VoiceVisualState;
   lastTranscript?: string;
   lastResponse?: string;
+  agentMode?: string;
 };
 
 export type VoiceAgentRuntimeState = {
@@ -34,6 +36,7 @@ export type VoiceAgentRuntimeState = {
   voiceState: VoiceVisualState;
   lastTranscript: string;
   lastResponse: string;
+  agentMode: string;
 };
 
 type WidgetPosition = {
@@ -213,6 +216,7 @@ export default function VoiceAgent3D({
   voiceState: controlledVoiceState,
   lastTranscript = "",
   lastResponse = "",
+  agentMode = "auto",
 }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
@@ -240,6 +244,10 @@ export default function VoiceAgent3D({
     "LOADING" | "READY" | "SWITCHING" | "ERROR"
   >("LOADING");
   const [modelControlError, setModelControlError] = useState("");
+  const [agentOptions, setAgentOptions] = useState<AgentSummary[]>([]);
+  const [agentControlState, setAgentControlState] = useState<"LOADING" | "READY" | "ERROR">(
+    "LOADING",
+  );
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
@@ -288,6 +296,22 @@ export default function VoiceAgent3D({
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    void getAgents()
+      .then((result) => {
+        if (!mounted) return;
+        setAgentOptions(result.agents);
+        setAgentControlState("READY");
+      })
+      .catch(() => {
+        if (mounted) setAgentControlState("ERROR");
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -798,6 +822,27 @@ export default function VoiceAgent3D({
               MODEL CONTROL ERROR
             </div>
           )}
+          <div className="voice-agent-model-control voice-agent-agent-control">
+            <label htmlFor="voice-agent-mode">AGENT MODE</label>
+            <select
+              id="voice-agent-mode"
+              value={agentMode}
+              onChange={(event) => {
+                window.dispatchEvent(
+                  new CustomEvent("cybertron:agent-mode-changed", {
+                    detail: { agentId: event.target.value },
+                  }),
+                );
+              }}
+              disabled={operationActive || agentControlState !== "READY"}
+            >
+              <option value="auto">AUTO ROUTER</option>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>{agent.name}</option>
+              ))}
+            </select>
+            <strong>{agentControlState}</strong>
+          </div>
           <div className="voice-agent-conversation-log">
             <section>
               <span>YOU / WHISPER</span>

@@ -42,6 +42,15 @@ const VAD_SPEECH_CONFIRM_MS = 250;
 const VAD_SILENCE_MS = 1600;
 const VAD_NO_SPEECH_TIMEOUT_MS = 12000;
 const VAD_MAX_RECORDING_MS = 30000;
+const AGENT_MODE_STORAGE_KEY = "cybertron.agent-mode";
+
+function storedAgentMode(): string {
+  try {
+    return window.localStorage.getItem(AGENT_MODE_STORAGE_KEY) ?? "auto";
+  } catch {
+    return "auto";
+  }
+}
 
 function getTelemetryState(
   overview: StatusOverview | null,
@@ -179,6 +188,7 @@ export default function DashboardPage({
 
   const [activeModel, setActiveModel] = useState("UNKNOWN");
   const [activeAgent, setActiveAgent] = useState("NONE");
+  const [agentMode, setAgentMode] = useState(() => storedAgentMode());
   const [activeTool, setActiveTool] = useState("NONE");
   const [evalCount, setEvalCount] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
@@ -461,7 +471,7 @@ export default function DashboardPage({
           finalResponse = streamEvent.error ?? "Unknown model streaming error.";
           setResponseText(finalResponse);
         }
-      });
+      }, agentMode);
 
       if (finalResponse) await speak(finalResponse);
     } catch (error) {
@@ -710,6 +720,18 @@ export default function DashboardPage({
   }, []);
 
   useEffect(() => {
+    const handleAgentModeChanged = (event: Event) => {
+      const agentId = (event as CustomEvent<{ agentId?: string }>).detail?.agentId;
+      if (!agentId) return;
+      setAgentMode(agentId);
+      window.localStorage.setItem(AGENT_MODE_STORAGE_KEY, agentId);
+      if (agentId === "auto") setActiveAgent("AUTO ROUTER");
+    };
+    window.addEventListener("cybertron:agent-mode-changed", handleAgentModeChanged);
+    return () => window.removeEventListener("cybertron:agent-mode-changed", handleAgentModeChanged);
+  }, []);
+
+  useEffect(() => {
     onVoiceAgentStateChange?.({
       activeAgent,
       activeTool,
@@ -719,11 +741,13 @@ export default function DashboardPage({
       voiceState,
       lastTranscript: lastRequest,
       lastResponse: responseText,
+      agentMode,
     });
   }, [
     activeAgent,
     activeModel,
     activeTool,
+    agentMode,
     displayedReactorState,
     lastRequest,
     onVoiceAgentStateChange,

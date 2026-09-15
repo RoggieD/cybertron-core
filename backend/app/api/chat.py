@@ -6,6 +6,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.app.agents.router import route_agent
+from backend.app.agents.registry import get_agent
+from backend.app.agents.base import AgentDefinition
 from backend.app.agents.context import format_tool_context
 from backend.app.agents.tools import run_agent_tool
 from backend.app.events.bus import event_bus
@@ -23,6 +25,20 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
+    agent_id: str | None = None
+
+
+def select_agent(request: ChatRequest) -> tuple[AgentDefinition, str]:
+    if not request.agent_id or request.agent_id == "auto":
+        return route_agent(request.message), "auto"
+
+    try:
+        return get_agent(request.agent_id), "manual"
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown agent override: {request.agent_id}",
+        ) from exc
 
 
 def build_messages(
@@ -74,7 +90,7 @@ async def chat(request: ChatRequest) -> dict:
     session_id = request.session_id or str(uuid4())
     trace_id = str(uuid4())
     model = model_service.active_model
-    agent = route_agent(request.message)
+    agent, selection_mode = select_agent(request)
 
     try:
         await event_bus.publish(
@@ -95,6 +111,7 @@ async def chat(request: ChatRequest) -> dict:
                 actor={"type": "core", "id": "cybertron"},
                 target={"type": "router", "id": "agent-router"},
                 status="running",
+                metadata={"mode": selection_mode},
             )
         )
         await event_bus.publish(
@@ -105,7 +122,7 @@ async def chat(request: ChatRequest) -> dict:
                 actor={"type": "router", "id": "agent-router"},
                 target={"type": "agent", "id": agent.id},
                 status="complete",
-                metadata={"agent_name": agent.name},
+                metadata={"agent_name": agent.name, "selection_mode": selection_mode},
             )
         )
         await event_bus.publish(
@@ -283,7 +300,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     session_id = request.session_id or str(uuid4())
     trace_id = str(uuid4())
     model = model_service.active_model
-    agent = route_agent(request.message)
+    agent, selection_mode = select_agent(request)
 
     async def publish(
         event_type: str,
@@ -318,13 +335,14 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 actor={"type": "core", "id": "cybertron"},
                 target={"type": "router", "id": "agent-router"},
                 status="running",
+                metadata={"mode": selection_mode},
             )
             await publish(
                 "agent.selected",
                 actor={"type": "router", "id": "agent-router"},
                 target={"type": "agent", "id": agent.id},
                 status="complete",
-                metadata={"agent_name": agent.name},
+                metadata={"agent_name": agent.name, "selection_mode": selection_mode},
             )
             await publish(
                 "agent.started",

@@ -41,6 +41,7 @@ const INITIAL_VOICE_AGENT_STATE: VoiceAgentRuntimeState = {
   voiceState: "OFFLINE",
   lastTranscript: "",
   lastResponse: "",
+  agentMode: "auto",
 };
 
 export default function CoreConsole() {
