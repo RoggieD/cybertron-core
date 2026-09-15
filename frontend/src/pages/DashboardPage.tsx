@@ -708,7 +708,7 @@ export default function DashboardPage({
 
     window.addEventListener("cybertron:voice-action", handleVoiceAction);
     return () => window.removeEventListener("cybertron:voice-action", handleVoiceAction);
-  }, [busy, microphoneReady, voiceState]);
+  }, [agentMode, busy, microphoneReady, voiceState]);
 
   useEffect(() => {
     const handleModelChanged = (event: Event) => {
@@ -898,28 +898,3 @@ export default function DashboardPage({
           <strong>{activeTool}</strong>
         </article>
         <article>
-          <span>ACTIVE EVENT</span>
-          <strong>{lastEvent?.event_type ?? "WAITING"}</strong>
-        </article>
-        <article>
-          <span>TRACE EVENTS</span>
-          <strong>{traceEventCount}</strong>
-        </article>
-        <article>
-          <span>TRACE ID</span>
-          <strong className="trace-id">{traceId ? traceId.slice(0, 8) : "—"}</strong>
-        </article>
-        <article>
-          <span>EVAL TOKENS</span>
-          <strong>{evalCount ?? "—"}</strong>
-        </article>
-        <article>
-          <span>MODEL DURATION</span>
-          <strong>{durationMs !== null ? `${durationMs.toFixed(0)} ms` : "—"}</strong>
-        </article>
-      </section>
-
-      <footer>Local-first AI orchestration control plane</footer>
-    </main>
-  );
-}
