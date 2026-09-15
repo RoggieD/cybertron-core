@@ -10,6 +10,7 @@ from backend.app.memory import (
     MemoryStore,
 )
 from backend.app.memory.short_term import format_conversation_context
+from backend.app.memory.salience import relevance_salience_score
 
 
 STOPWORDS = {
@@ -104,7 +105,7 @@ def retrieve_memory_context(
         "data/cybertron.db"
     )
 
-    ranked: list[tuple[int, dict]] = []
+    ranked: list[tuple[float, int, dict]] = []
 
     for scope in (
         "shared",
@@ -164,11 +165,17 @@ def retrieve_memory_context(
             if not overlap:
                 continue
 
-            score = len(overlap)
+            overlap_count = len(overlap)
+            relevance = overlap_count / len(query_tokens)
+            score = relevance_salience_score(
+                relevance,
+                memory,
+            )
 
             ranked.append(
                 (
                     score,
+                    overlap_count,
                     memory,
                 )
             )
@@ -176,7 +183,8 @@ def retrieve_memory_context(
     ranked.sort(
         key=lambda item: (
             item[0],
-            item[1].get(
+            item[1],
+            item[2].get(
                 "updated_at",
                 "",
             ),
@@ -187,7 +195,7 @@ def retrieve_memory_context(
     seen = set()
     results = []
 
-    for _, memory in ranked:
+    for _, _, memory in ranked:
         memory_id = memory["id"]
 
         if memory_id in seen:
