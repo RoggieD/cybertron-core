@@ -173,6 +173,7 @@ export default function DashboardPage({
   const [overviewError, setOverviewError] = useState(false);
 
   const [prompt, setPrompt] = useState("");
+  const [lastRequest, setLastRequest] = useState("");
   const [responseText, setResponseText] = useState("");
   const [reactorState, setReactorState] = useState<ReactorState>("IDLE");
 
@@ -409,6 +410,7 @@ export default function DashboardPage({
     if (!trimmed) return;
 
     setPrompt(trimmed);
+    setLastRequest(trimmed);
     setResponseText("");
     setEvalCount(null);
     setDurationMs(null);
@@ -702,13 +704,17 @@ export default function DashboardPage({
       orchestrationState: displayedReactorState,
       speechAnalyser,
       voiceState,
+      lastTranscript: lastRequest,
+      lastResponse: responseText,
     });
   }, [
     activeAgent,
     activeModel,
     activeTool,
     displayedReactorState,
+    lastRequest,
     onVoiceAgentStateChange,
+    responseText,
     speechAnalyser,
     voiceState,
   ]);

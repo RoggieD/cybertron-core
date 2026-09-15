@@ -18,6 +18,8 @@ type VoiceAgent3DProps = {
   orchestrationState?: string;
   speechAnalyser?: AnalyserNode | null;
   voiceState?: VoiceVisualState;
+  lastTranscript?: string;
+  lastResponse?: string;
 };
 
 export type VoiceAgentRuntimeState = {
@@ -27,6 +29,8 @@ export type VoiceAgentRuntimeState = {
   orchestrationState: string;
   speechAnalyser: AnalyserNode | null;
   voiceState: VoiceVisualState;
+  lastTranscript: string;
+  lastResponse: string;
 };
 
 type WidgetPosition = {
@@ -47,6 +51,7 @@ const WIDGET_SNAP_DISTANCE = 28;
 const WIDGET_STORAGE_KEY = "cybertron.voice-agent.position";
 const WIDGET_MINIMIZED_STORAGE_KEY = "cybertron.voice-agent.minimized";
 const WIDGET_SIZE_STORAGE_KEY = "cybertron.voice-agent.size";
+const WIDGET_CONVERSATION_STORAGE_KEY = "cybertron.voice-agent.conversation-open";
 
 const VOICE_STATES: VoiceVisualState[] = [
   "READY",
@@ -173,6 +178,14 @@ function storedMinimized(): boolean {
   }
 }
 
+function storedConversationOpen(): boolean {
+  try {
+    return window.localStorage.getItem(WIDGET_CONVERSATION_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function displayValue(value: string | undefined, fallback: string) {
   const normalized = value?.trim();
   return normalized && normalized !== "NONE" ? normalized : fallback;
@@ -192,6 +205,8 @@ export default function VoiceAgent3D({
   orchestrationState = "IDLE",
   speechAnalyser = null,
   voiceState: controlledVoiceState,
+  lastTranscript = "",
+  lastResponse = "",
 }: VoiceAgent3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const visualStateRef = useRef<VoiceVisualState>("OFFLINE");
@@ -211,6 +226,7 @@ export default function VoiceAgent3D({
   const [size, setSize] = useState<WidgetSize>(() => storedSize());
   const [position, setPosition] = useState<WidgetPosition>(() => storedPosition(size));
   const [minimized, setMinimized] = useState(() => storedMinimized());
+  const [conversationOpen, setConversationOpen] = useState(() => storedConversationOpen());
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
@@ -272,6 +288,13 @@ export default function VoiceAgent3D({
   useEffect(() => {
     window.localStorage.setItem(WIDGET_MINIMIZED_STORAGE_KEY, String(minimized));
   }, [minimized]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      WIDGET_CONVERSATION_STORAGE_KEY,
+      String(conversationOpen),
+    );
+  }, [conversationOpen]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -619,7 +642,7 @@ export default function VoiceAgent3D({
 
   return (
     <aside
-      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""} ${minimized ? "voice-agent-minimized" : ""}`}
+      className={`voice-agent-3d voice-agent-${voiceState.toLowerCase()} ${operationActive ? "voice-agent-operating" : ""} ${minimized ? "voice-agent-minimized" : ""} ${conversationOpen ? "voice-agent-conversation-open" : ""}`}
       style={{
         left: position.x,
         top: position.y,
@@ -639,6 +662,17 @@ export default function VoiceAgent3D({
         <span>VOICE AGENT</span>
         <div className="voice-agent-heading-actions">
           <strong>{voiceState}</strong>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={() => setConversationOpen((current) => !current)}
+            aria-label={conversationOpen ? "Hide conversation" : "Show conversation"}
+            aria-pressed={conversationOpen}
+            title={conversationOpen ? "Hide conversation" : "Show conversation"}
+          >
+            {conversationOpen ? "CORE" : "CHAT"}
+          </button>
           <button
             type="button"
             onPointerDown={(event) => event.stopPropagation()}
@@ -670,6 +704,18 @@ export default function VoiceAgent3D({
         </div>
       </div>
       <div ref={mountRef} className="voice-agent-canvas" aria-hidden="true" />
+      {conversationOpen && (
+        <div className="voice-agent-conversation" aria-live="polite">
+          <section>
+            <span>YOU / WHISPER</span>
+            <p>{lastTranscript || "Awaiting command."}</p>
+          </section>
+          <section>
+            <span>C.O.R.E.</span>
+            <p>{lastResponse || "Awaiting response."}</p>
+          </section>
+        </div>
+      )}
       <div className="voice-agent-controls">
         {voiceState === "SPEAKING" ? (
           <button type="button" onClick={() => sendVoiceAction("stop-speaking")}>
