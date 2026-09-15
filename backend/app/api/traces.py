@@ -58,7 +58,7 @@ async def trace_detail(
         "count": len(events),
         "started_at": events[0]["timestamp"],
         "ended_at": events[-1]["timestamp"],
-        "completed": any(event["event_type"] == "response.generated" for event in events),
+        "completed": any(event["event_type"] in {"response.generated", "infrastructure.snapshot"} for event in events),
         "errored": any(event["event_type"] == "model.error" for event in events),
         "events": events,
     }

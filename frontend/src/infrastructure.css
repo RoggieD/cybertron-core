@@ -1,0 +1,23 @@
+.infrastructure-panel { margin: 24px 0; padding: 24px; border: 1px solid #315459; border-radius: 14px; background: #031015e8; text-align: left; }
+.infrastructure-panel header, .infrastructure-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.infrastructure-panel h2 { margin: 8px 0; }
+.infrastructure-panel p { line-height: 1.6; }
+.infrastructure-panel button, .infrastructure-panel input, .infrastructure-panel select { background: #061b21; border: 1px solid #52777b; border-radius: 5px; color: #e2faff; padding: 10px; font: inherit; }
+.infrastructure-panel button { cursor: pointer; }
+.infrastructure-panel button:disabled { opacity: .5; cursor: wait; }
+.infrastructure-panel :focus-visible { outline: 2px solid #53e6ff; outline-offset: 3px; }
+.infrastructure-panel [role=alert] { color: #ffd08a; }
+.infrastructure-toolbar label { display: flex; align-items: center; gap: 8px; }
+.infrastructure-help, .infrastructure-stamp { font-size: .8rem; color: #aad0d7; }
+.infrastructure-scene { height: 460px; overflow: hidden; border: 1px solid #274149; border-radius: 8px; background: radial-gradient(ellipse at center, #102830, #02090d); }
+.infrastructure-scene canvas { display: block; touch-action: none; }
+.infrastructure-inspection { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr); gap: 24px; margin-top: 22px; }
+.infrastructure-entities { max-height: 520px; overflow: auto; padding: 4px; }
+.infrastructure-entities button { display: flex; flex-direction: column; text-align: left; width: 100%; gap: 7px; margin: 7px 0; overflow-wrap: anywhere; }
+.infrastructure-entities button[aria-pressed=true] { border-color: #53e6ff; background: #12363e; }
+.infrastructure-entities span { font-size: .65rem; color: #92bfcc; letter-spacing: .12em; }
+.infrastructure-panel aside { min-width: 0; padding: 18px; background: #07191d; border: 1px solid #274149; border-radius: 8px; overflow-wrap: anywhere; }
+.infrastructure-panel a { color: #70dfff; }
+.infrastructure-panel dt { color: #a4cbd2; font-size: .8rem; }
+.infrastructure-panel dd { margin: 4px 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media(max-width: 700px) { .infrastructure-panel { padding: 14px; } .infrastructure-inspection { grid-template-columns: 1fr; } .infrastructure-scene { height: 320px; } .infrastructure-toolbar input { min-width: 0; width: 100%; } }

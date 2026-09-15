@@ -1,3 +1,4 @@
+import InfrastructureExplorer from "../components/InfrastructureExplorer";
 import { useEffect, useState } from "react";
 
 import {
@@ -235,6 +236,8 @@ export default function SystemsPage() {
         </h1>
         <p className="subtitle">Host telemetry, capacity, runtime health, and infrastructure trends</p>
       </section>
+
+      <InfrastructureExplorer />
 
       <section className="telemetry-panel">
         <div className="telemetry-header">

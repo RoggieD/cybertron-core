@@ -168,3 +168,10 @@ async def status_incident_detail(
     )
 
     return incident_timeline(incident_id)
+
+
+
+@router.get("/infrastructure")
+async def status_infrastructure() -> dict:
+    from backend.app.services.infrastructure import infrastructure_snapshot
+    return await infrastructure_snapshot()

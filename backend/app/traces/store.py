@@ -194,7 +194,7 @@ class TraceStore:
                     MIN(timestamp) AS started_at,
                     MAX(timestamp) AS ended_at,
                     COUNT(*) AS event_count,
-                    MAX(CASE WHEN event_type = 'response.generated' THEN 1 ELSE 0 END)
+                    MAX(CASE WHEN event_type IN ('response.generated', 'infrastructure.snapshot') THEN 1 ELSE 0 END)
                         AS completed,
                     MAX(CASE WHEN event_type = 'model.error' THEN 1 ELSE 0 END)
                         AS errored
