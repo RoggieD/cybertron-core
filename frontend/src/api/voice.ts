@@ -42,6 +42,24 @@ function spokenUptime(text: string): string | null {
   );
 }
 
+function securityNarrativeSummary(text: string): string {
+  const cleaned = text
+    .replace(/\\([\\`*_#])/g, "$1")
+    .replace(/[*`#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const summary = /\bSummary\s*:\s*(.+)$/i.exec(cleaned)?.[1] ?? cleaned;
+  const sentences = summary.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [];
+  let excerpt = "";
+  for (const sentence of sentences) {
+    if (excerpt.length + sentence.length > 600) break;
+    excerpt += sentence;
+    if (excerpt.length >= 300) break;
+  }
+  if (!excerpt.trim()) excerpt = summary.slice(0, 500).replace(/\s+\S*$/, "") + "…";
+  return `${excerpt.trim()} This is a limited read-only snapshot, not proof that the host is secure. See the chat for full findings and limitations.`;
+}
+
 function toolAwareSpeechText(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   const upper = normalized.toUpperCase();
@@ -92,6 +110,7 @@ function toolAwareSpeechText(text: string): string {
     if (approved) parts.push(`${approved} endpoints are approved.`);
     if (drift) parts.push(`${drift} policy drift item${drift === "1" ? " is" : "s are"} present.`);
     if (learned) parts.push(`${learned} learned-only endpoint${learned === "1" ? " remains" : "s remain"} for review.`);
+    if (parts.length === 1) return securityNarrativeSummary(text);
     return parts.join(" ");
   }
 
