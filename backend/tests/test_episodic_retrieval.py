@@ -182,8 +182,10 @@ def test_exact_live_prompt_reaches_model_with_projected_episode(store, monkeypat
         assert "NOT CURRENT/LIVE EVIDENCE" in system
         yield {"message": {"content": "historical recall reached model"}, "done": True}
 
+    published = []
+
     async def publish(event):
-        pass
+        published.append(event.event_type)
 
     monkeypatch.setattr(agent_tools, "execute_tool", no_live_tool)
     monkeypatch.setattr(chat.event_bus, "publish", publish)
@@ -194,6 +196,7 @@ def test_exact_live_prompt_reaches_model_with_projected_episode(store, monkeypat
         events = [json.loads(line) async for line in response.body_iterator]
         assert "historical recall reached model" in json.dumps(events)
         assert not any(event["event"] == "tool.result" for event in events)
+        assert published.index("episodic.context_selected") < published.index("model.request_started")
         chat.active_requests.clear()
 
     asyncio.run(scenario())

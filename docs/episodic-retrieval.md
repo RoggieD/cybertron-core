@@ -34,6 +34,24 @@ Request a current inspection separately when a fresh observation is needed.
 
 ## Live validation
 
+The Processing Graph displays historical recall separately from tools/live data.
+Three request-scoped events are persisted for live display and trace replay:
+`episodic.search_started`, `episodic.search_completed`, and
+`episodic.context_selected`. The final event reports the selected episode IDs,
+historical trace IDs, timestamps, tool IDs, truncation flags, omitted count and
+estimated token usage. Prompts and outcomes are not copied into these events.
+The matched count is the relevance-ranked retrieval shortlist (up to five).
+The model edge appears only when at least one episode fits into context.
+Telemetry completes before `model.request_started`; it describes prepared input,
+not proof of what the model used in its reasoning. Ordinary conversation emits
+no recall events. Older traces without these events show "No episodic search
+recorded" rather than implying a zero-match search.
+
+To validate visualization, keep Processing Graph open and submit a recall prompt
+in chat. Inspect the historical panel or load/replay the resulting trace. Confirm
+the episode and trace IDs match the recalled record, and long summaries show the
+shortened badge. A new ordinary request should clear the prior recall details.
+
 After pulling main on GM-AI01, ask in the C.O.R.E. browser:
 
 > What happened last time we inspected Docker? Cite the historical episode and

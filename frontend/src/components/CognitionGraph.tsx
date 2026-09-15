@@ -28,6 +28,8 @@ type GraphEdge = {
 };
 
 export type CognitionProvenance = {
+  episodic?: boolean;
+  episodicSelected?: boolean;
   memorySources: string[];
   tools: string[];
 };
@@ -152,6 +154,12 @@ function buildGraph(provenance: CognitionProvenance): {
 } {
   const nodes = [...BASE_NODES];
   const edges = [...BASE_EDGES];
+  if (provenance.episodic) {
+    nodes.push({ id: "episodic", label: "HISTORICAL RECALL", position: [3.4, 1.6, 0.2],
+      provenance: true, sourceKind: "historical" });
+    edges.push({ from: "agent", to: "episodic", provenance: true, sourceKind: "historical" });
+    if (provenance.episodicSelected) edges.push({ from: "episodic", to: "model", provenance: true, sourceKind: "historical" });
+  }
 
   const memorySources = provenance.memorySources.slice(0, 4);
   const tools = provenance.tools.slice(0, 4);
@@ -196,6 +204,7 @@ function buildGraph(provenance: CognitionProvenance): {
 }
 
 function eventNode(eventType: string): NodeId | null {
+  if (eventType.startsWith("episodic.")) return "episodic";
   if (eventType === "prompt.received") return "user";
   if (eventType.startsWith("router.")) return "router";
   if (eventType.startsWith("agent.")) return "agent";
@@ -367,6 +376,12 @@ export default function CognitionGraph({
       }
     }
 
+    if (event.event_type.startsWith("episodic.")) {
+      setObservedProvenance((current) => ({ ...current, episodic: true,
+        episodicSelected: event.event_type === "episodic.context_selected"
+          ? Number(event.metadata?.selected_count ?? 0) > 0 : current.episodicSelected }));
+    }
+
     if (event.event_type.startsWith("tool.")) {
       const tool = entityId(event, "tool");
       if (tool) {
@@ -391,11 +406,11 @@ export default function CognitionGraph({
 
   const graph = useMemo(
     () => buildGraph(effectiveProvenance),
-    [effectiveProvenance.memorySources, effectiveProvenance.tools],
+    [effectiveProvenance.memorySources, effectiveProvenance.tools, effectiveProvenance.episodic, effectiveProvenance.episodicSelected],
   );
 
   const graphSignature = useMemo(
-    () => graph.nodes.map((node) => node.id).join("|"),
+    () => graph.nodes.map((node) => node.id).join("|") + graph.edges.map((edge) => `${edge.from}:${edge.to}`).join("|"),
     [graph],
   );
 
@@ -696,7 +711,7 @@ export default function CognitionGraph({
   }, [graphSignature]);
 
   const provenanceCount =
-    effectiveProvenance.memorySources.length + effectiveProvenance.tools.length;
+    effectiveProvenance.memorySources.length + effectiveProvenance.tools.length + (effectiveProvenance.episodicSelected ? 1 : 0);
 
   const legendItems: Array<[string, number]> = [
     ["USER", BASE_NODE_COLORS.user],
@@ -737,7 +752,7 @@ export default function CognitionGraph({
           POLICY
         </span>
         <span style={{ color: hexCss(SOURCE_COLORS.historical), borderColor: hexCss(SOURCE_COLORS.historical) }}>
-          HISTORY
+          HISTORY{activeNode === "episodic" ? " • ACTIVE" : ""}
         </span>
         <span style={{ color: hexCss(SOURCE_COLORS.telemetry), borderColor: hexCss(SOURCE_COLORS.telemetry) }}>
           LIVE DATA

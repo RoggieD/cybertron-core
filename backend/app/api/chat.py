@@ -22,6 +22,7 @@ from backend.app.tools.renderers import (
     should_return_verified_only,
 )
 from backend.app.memory.context import format_memory_context
+from backend.app.memory.episodic_retrieval import flush_episodic_telemetry
 from backend.app.tools.docker_health_renderer import render_docker_health_summary
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -227,6 +228,11 @@ async def chat(request: ChatRequest) -> dict:
                 "done": True,
             }
 
+        messages = build_messages(
+            request.message, model, agent.name, agent.instructions,
+            tool_id, tool_result, session_id=session_id, trace_id=trace_id,
+        )
+        await flush_episodic_telemetry()
         await event_bus.publish(
             CoreEvent(
                 event_type="model.request_started",
@@ -240,16 +246,7 @@ async def chat(request: ChatRequest) -> dict:
 
         result = await model_service.provider.chat(
             model=model,
-            messages=build_messages(
-                request.message,
-                model,
-                agent.name,
-                agent.instructions,
-                tool_id,
-                tool_result,
-                session_id=session_id,
-                trace_id=trace_id,
-            ),
+            messages=messages,
         )
         message = result.get("message", {})
         model_response = message.get("content", "")
@@ -439,6 +436,11 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 )
                 return
 
+            messages = build_messages(
+                request.message, model, agent.name, agent.instructions,
+                tool_id, tool_result, session_id=session_id, trace_id=trace_id,
+            )
+            await flush_episodic_telemetry()
             await publish(
                 "model.request_started",
                 actor={"type": "agent", "id": agent.id},
@@ -458,16 +460,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
             async for chunk in model_service.provider.stream_chat(
                 model=model,
-                messages=build_messages(
-                    request.message,
-                    model,
-                    agent.name,
-                    agent.instructions,
-                    tool_id,
-                    tool_result,
-                    session_id=session_id,
-                    trace_id=trace_id,
-                ),
+                messages=messages,
             ):
                 message = chunk.get("message", {})
                 content = message.get("content", "")

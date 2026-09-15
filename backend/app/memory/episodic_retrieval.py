@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import heapq
+import asyncio
+from contextvars import ContextVar
 import json
 import re
 from datetime import datetime
@@ -10,6 +12,15 @@ from backend.app.memory.context_budget import allocate_context_budget, estimate_
 from backend.app.memory.episodic import EpisodicStore, episodic_store
 from backend.app.memory.salience import relevance_salience_score
 from backend.app.memory.short_term import get_conversation_history
+
+_pending_telemetry: ContextVar[asyncio.Task | None] = ContextVar("episodic_telemetry", default=None)
+
+
+async def flush_episodic_telemetry() -> None:
+    task = _pending_telemetry.get()
+    _pending_telemetry.set(None)
+    if task is not None:
+        await task
 
 
 RECALL = re.compile(
@@ -77,7 +88,10 @@ def retrieve_episodic_context(
     return [item[4] for item in heapq.nlargest(min(limit, 25), candidates(), key=lambda x: x[:4])]
 
 
-def format_episodic_context(episodes: list[dict], *, token_budget: int | None = None) -> str:
+def format_episodic_context(
+    episodes: list[dict], *, token_budget: int | None = None,
+    selection: list[dict] | None = None,
+) -> str:
     budget = allocate_context_budget()["episodic_memory"] if token_budget is None else token_budget
     header = (
         "HISTORICAL OPERATIONAL MEMORY — NOT CURRENT/LIVE EVIDENCE\n"
@@ -119,4 +133,58 @@ def format_episodic_context(episodes: list[dict], *, token_budget: int | None = 
         if line and estimate_tokens(result + line) <= budget:
             result += line
             count += 1
+            if selection is not None:
+                rendered = json.loads(line)
+                selection.append({
+                    "episode_id": record["id"], "trace_id": record["trace_id"],
+                    "timestamp": record["timestamp"], "tool_id": record["tool_id"],
+                    "summary_truncated": bool(rendered.get("summary_truncated")),
+                })
     return result.rstrip() if count else ""
+
+
+def build_episodic_context(message: str, *, session_id: str | None = None, trace_id: str | None = None) -> str:
+    """Publish bounded provenance for the exact records packed into context."""
+    if not RECALL.search(message):
+        return ""
+    import asyncio
+    import logging
+    from backend.app.events.bus import event_bus
+    from backend.app.events.schema import CoreEvent
+
+    def event(kind: str, status: str, metadata: dict) -> CoreEvent:
+        return CoreEvent(
+            event_type=f"episodic.{kind}", status=status,
+            session_id=session_id, trace_id=trace_id,
+            actor={"type": "agent", "id": "conversation-context"},
+            target={"type": "memory", "id": "historical-operational-memory"},
+            metadata=metadata,
+        )
+
+    events = [event("search_started", "running", {"historical": True})]
+    episodes = retrieve_episodic_context(message, trace_id=trace_id)
+    events.append(event("search_completed", "complete", {"matched_count": len(episodes), "historical": True}))
+    selection: list[dict] = []
+    budget = allocate_context_budget()["episodic_memory"]
+    context = format_episodic_context(episodes, token_budget=budget, selection=selection)
+    events.append(event("context_selected", "complete", {
+        "historical": True, "matched_count": len(episodes),
+        "selected_count": len(selection), "omitted_count": len(episodes) - len(selection),
+        "token_budget": budget, "estimated_tokens": estimate_tokens(context),
+        "episodes": selection,
+    }))
+
+    async def publish() -> None:
+        try:
+            for item in events:
+                await event_bus.publish(item)
+        except Exception:
+            logging.getLogger(__name__).exception("Episodic recall telemetry failed")
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        _pending_telemetry.set(loop.create_task(publish()))
+    return context

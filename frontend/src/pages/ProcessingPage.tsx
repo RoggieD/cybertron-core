@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { EMPTY_RECALL, recallForEvent, type RecallState } from "../api/episodic";
+import EpisodicRecallPanel from "../components/EpisodicRecallPanel";
 
 import type { TraceDetail } from "../api/traces";
 import {
@@ -22,6 +24,7 @@ type ProcessingStage =
   | "ERROR";
 
 type ProvenanceState = {
+  recall: RecallState;
   userInput: boolean;
   agent: string;
   memoryCount: number | null;
@@ -34,6 +37,7 @@ type ProvenanceState = {
 };
 
 const EMPTY_PROVENANCE: ProvenanceState = {
+  recall: EMPTY_RECALL,
   userInput: false,
   agent: "NONE",
   memoryCount: null,
@@ -113,6 +117,7 @@ function stageForEvent(eventType: string): ProcessingStage {
   }
   if (eventType.startsWith("agent.")) return "AGENT";
   if (eventType.startsWith("memory.")) return "MEMORY";
+  if (eventType.startsWith("episodic.")) return "MEMORY";
   if (eventType.startsWith("tool.")) return "TOOL";
   if (eventType.startsWith("model.")) {
     return eventType === "model.error" ? "ERROR" : "MODEL";
@@ -127,6 +132,12 @@ function describeEvent(event: CoreEvent): string {
   const model = modelLabel(event);
 
   switch (event.event_type) {
+    case "episodic.search_started":
+      return "Searching historical operational memory";
+    case "episodic.search_completed":
+      return `Historical matches: ${numberValue(event.metadata?.matched_count) ?? 0}`;
+    case "episodic.context_selected":
+      return `Historical episodes prepared for model: ${numberValue(event.metadata?.selected_count) ?? 0}`;
     case "prompt.received":
       return "Prompt accepted by C.O.R.E.";
     case "router.started":
@@ -181,7 +192,7 @@ function joinValues(values: string[], empty = "NONE"): string {
 }
 
 function provenanceForEvent(current: ProvenanceState, event: CoreEvent): ProvenanceState {
-  let next = current;
+  let next = { ...current, recall: recallForEvent(current.recall, event) };
 
   if (event.event_type === "prompt.received") {
     next = { ...next, userInput: true };
@@ -256,6 +267,7 @@ function delay(milliseconds: number) {
 }
 
 export default function ProcessingPage() {
+  const liveTraceRef = useRef<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<CoreEvent | null>(null);
   const [eventTrail, setEventTrail] = useState<CoreEvent[]>([]);
@@ -274,6 +286,10 @@ export default function ProcessingPage() {
     const socket = connectCoreWebSocket(
       (event) => {
         if (replaying) return;
+        // Keep recall and other provenance attached to one request. Background
+        // events and late telemetry from another trace must not contaminate it.
+        if (event.event_type === "prompt.received") liveTraceRef.current = event.trace_id ?? null;
+        if (!event.trace_id || event.trace_id !== liveTraceRef.current) return;
 
         setViewMode("LIVE");
         setLastEvent(event);
@@ -402,6 +418,8 @@ export default function ProcessingPage() {
             provenance={{
               memorySources: provenance.memorySources,
               tools: provenance.tools,
+              episodic: provenance.recall.phase !== "not_queried",
+              episodicSelected: provenance.recall.selected > 0,
             }}
           />
         </Suspense>
@@ -457,10 +475,13 @@ export default function ProcessingPage() {
           <div><span>EVIDENCE CHANNELS</span><strong>{[
             provenance.userInput ? "USER" : null,
             provenance.memoryCount !== null ? "MEMORY" : null,
+            provenance.recall.selected > 0 ? "HISTORY" : null,
             provenance.tools.length ? "TOOLS" : null,
           ].filter(Boolean).join(" + ") || "NONE"}</strong></div>
         </div>
       </section>
+
+      <EpisodicRecallPanel recall={provenance.recall} />
 
       <div className="processing-status-grid">
         <article><span>EVENT BUS</span><strong className={connected ? "online" : "warning"}>{connected ? "CONNECTED" : "OFFLINE"}</strong></article>
