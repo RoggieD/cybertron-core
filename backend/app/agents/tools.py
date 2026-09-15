@@ -29,6 +29,11 @@ def select_tool(
 ) -> tuple[str | None, dict]:
     normalized = message.lower()
 
+    # Reference questions use the knowledge context assembled for the model.
+    # A service name in a documentation question is not a reachability request.
+    if is_reference_question(message):
+        return None, {}
+
     memory_query = extract_memory_query(
         message
     )
@@ -328,6 +333,23 @@ def select_tool(
         return "docker.inventory", {}
 
     return None, {}
+
+
+def is_reference_question(message: str) -> bool:
+    text = message.lower()
+    # Preserve explicit live inspection requests, including mixed requests for
+    # a current check plus an explanation. Nouns such as "live inspection" in
+    # a provenance disclaimer are not inspection commands.
+    live = re.search(
+        r"\b(?:check|inspect|scan|measure|test|probe)\s+(?:the\s+)?"
+        r"(?:current\b|live\b|local\b|host\b|system\b|docker\b|containers?\b|"
+        r"open[ -]?webui\b|ollama\b|service\b|reachability\b)", text,
+    )
+    if live:
+        return False
+    reference = re.search(r"\b(?:knowledge base|documentation|reference guidance|reference material|docs)\b", text)
+    explanation = re.search(r"\b(?:explain|describe|how (?:does|do|can|to)|what (?:is|are))\b", text)
+    return bool(reference and explanation)
 
 
 async def run_agent_tool(
