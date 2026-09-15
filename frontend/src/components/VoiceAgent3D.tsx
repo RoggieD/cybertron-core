@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 
@@ -191,9 +192,12 @@ function displayValue(value: string | undefined, fallback: string) {
   return normalized && normalized !== "NONE" ? normalized : fallback;
 }
 
-function sendVoiceAction(action: "listen" | "stop-speaking") {
+function sendVoiceAction(
+  action: "listen" | "stop-speaking" | "submit",
+  message?: string,
+) {
   window.dispatchEvent(
-    new CustomEvent("cybertron:voice-action", { detail: { action } }),
+    new CustomEvent("cybertron:voice-action", { detail: { action, message } }),
   );
 }
 
@@ -227,6 +231,7 @@ export default function VoiceAgent3D({
   const [position, setPosition] = useState<WidgetPosition>(() => storedPosition(size));
   const [minimized, setMinimized] = useState(() => storedMinimized());
   const [conversationOpen, setConversationOpen] = useState(() => storedConversationOpen());
+  const [chatInput, setChatInput] = useState("");
   const operationActive = ["ROUTING", "AGENT_ACTIVE", "TOOL_ACTIVE", "THINKING"].includes(
     orchestrationState,
   );
@@ -638,6 +643,14 @@ export default function VoiceAgent3D({
     document.body.classList.remove("voice-agent-resizing");
   }
 
+  function submitChat(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = chatInput.trim();
+    if (!message || operationActive) return;
+    sendVoiceAction("submit", message);
+    setChatInput("");
+  }
+
   if (!active) return null;
 
   return (
@@ -706,14 +719,29 @@ export default function VoiceAgent3D({
       <div ref={mountRef} className="voice-agent-canvas" aria-hidden="true" />
       {conversationOpen && (
         <div className="voice-agent-conversation" aria-live="polite">
-          <section>
-            <span>YOU / WHISPER</span>
-            <p>{lastTranscript || "Awaiting command."}</p>
-          </section>
-          <section>
-            <span>C.O.R.E.</span>
-            <p>{lastResponse || "Awaiting response."}</p>
-          </section>
+          <div className="voice-agent-conversation-log">
+            <section>
+              <span>YOU / WHISPER</span>
+              <p>{lastTranscript || "Awaiting command."}</p>
+            </section>
+            <section>
+              <span>C.O.R.E.</span>
+              <p>{lastResponse || "Awaiting response."}</p>
+            </section>
+          </div>
+          <form className="voice-agent-chat-form" onSubmit={submitChat}>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Command C.O.R.E.…"
+              disabled={operationActive}
+              aria-label="Command C.O.R.E."
+            />
+            <button type="submit" disabled={operationActive || !chatInput.trim()}>
+              SEND
+            </button>
+          </form>
         </div>
       )}
       <div className="voice-agent-controls">

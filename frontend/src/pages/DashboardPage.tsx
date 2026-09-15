@@ -674,7 +674,8 @@ export default function DashboardPage({
 
   useEffect(() => {
     const handleVoiceAction = (event: Event) => {
-      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+      const detail = (event as CustomEvent<{ action?: string; message?: string }>).detail;
+      const action = detail?.action;
 
       if (action === "listen") {
         if (voiceState === "LISTENING") {
@@ -689,6 +690,9 @@ export default function DashboardPage({
         }
       } else if (action === "stop-speaking" && voiceState === "SPEAKING") {
         stopSpeaking();
+      } else if (action === "submit" && !busy) {
+        const message = detail?.message?.trim();
+        if (message) void processMessage(message);
       }
     };
 

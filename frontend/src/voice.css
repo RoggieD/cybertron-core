@@ -250,11 +250,22 @@ body.voice-agent-resizing {
   right: 12px;
   bottom: 58px;
   left: 12px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 8px 9px;
   border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
   background: rgba(0, 7, 10, 0.78);
   box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.52);
+  scrollbar-color: currentColor transparent;
+  scrollbar-width: thin;
+}
+
+.voice-agent-conversation-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
   scrollbar-color: currentColor transparent;
   scrollbar-width: thin;
 }
@@ -281,6 +292,47 @@ body.voice-agent-resizing {
   font-size: 0.59rem;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.voice-agent-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.voice-agent-chat-form input,
+.voice-agent-chat-form button {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: rgba(0, 0, 0, 0.46);
+  color: currentColor;
+  font: inherit;
+  font-size: 0.55rem;
+}
+
+.voice-agent-chat-form input {
+  padding: 6px 7px;
+  outline: none;
+}
+
+.voice-agent-chat-form input:focus {
+  border-color: currentColor;
+  box-shadow: inset 0 0 10px color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.voice-agent-chat-form button {
+  padding: 6px 8px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+}
+
+.voice-agent-chat-form button:disabled,
+.voice-agent-chat-form input:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
 .voice-agent-operation {
