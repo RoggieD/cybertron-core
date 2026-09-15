@@ -454,6 +454,10 @@ export default function DashboardPage({
   async function processMessage(message: string) {
     const trimmed = message.trim();
     if (!trimmed || requestRef.current || recorderRef.current || microphoneStartingRef.current || voiceState === "TRANSCRIBING") return;
+    const requestHistory = [
+      ...conversationHistory,
+      ...(lastRequest && responseText ? [{ prompt: lastRequest, response: responseText }] : []),
+    ];
     const controller = new AbortController();
     requestRef.current = controller;
     cancelTokenRef.current = "";
@@ -524,7 +528,7 @@ export default function DashboardPage({
         if (streamEvent.event === "model.error") {
           throw new Error(streamEvent.error ?? "Unknown model streaming error.");
         }
-      }, agentMode, controller.signal);
+      }, agentMode, controller.signal, requestHistory);
 
       controller.signal.throwIfAborted();
       setReactorState("COMPLETE");
@@ -801,7 +805,7 @@ export default function DashboardPage({
 
     window.addEventListener("cybertron:voice-action", handleVoiceAction);
     return () => window.removeEventListener("cybertron:voice-action", handleVoiceAction);
-  }, [agentMode, busy, microphoneReady, voiceState, lastRequest, responseText]);
+  }, [agentMode, busy, microphoneReady, voiceState, lastRequest, responseText, conversationHistory]);
 
   useEffect(() => {
     const handleModelChanged = (event: Event) => {

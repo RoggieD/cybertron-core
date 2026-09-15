@@ -6,9 +6,13 @@ Each model request that packs reference sources retains their exact metadata in
 contains KB identity, source path, section, chunk ID, excerpt-shortening flag, and the
 original request trace; it does not duplicate document content or model output.
 
-The browser retains up to 12 receipts, matching each to its completed prompt/answer.
-It passes the receipt for the immediately preceding exchange on the next request.
-NEW CHAT clears receipt continuity. Incomplete or altered answers do not match a receipt.
+The browser retains up to 12 receipts in memory, matching each to its completed
+prompt/answer. The active chat passes its conversation snapshot directly to the request
+transport, which sends the receipt for the immediately preceding exchange. Live continuity
+does not depend on delayed conversation saves or successful localStorage writes.
+Storage is a best-effort reload backup: if it is unavailable, live follow-ups still work,
+but continuity cannot survive a page reload. NEW CHAT clears both the in-memory receipts
+and their stored backup when possible. Incomplete or altered answers do not match a receipt.
 API clients can pass the completed response's `reference_receipt` in a subsequent chat
 request. Treat the opaque token as access to that answer's source metadata.
 

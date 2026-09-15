@@ -64,8 +64,11 @@ export async function streamChat(
   onEvent: (event: StreamEvent) => void,
   agentId?: string | null,
   signal?: AbortSignal,
+  activeHistory?: ConversationExchange[],
 ): Promise<void> {
-  const history = browserConversationHistory();
+  // The mounted chat owns live history. Storage is only a reload fallback.
+  const history = (activeHistory ?? browserConversationHistory())
+    .filter((item) => item.prompt.trim() && item.response.trim()).slice(-MODEL_HISTORY_LIMIT);
   let answer = "";
   const deliver = (event: StreamEvent) => {
     if (event.event === "tool.result" && event.content) rememberReferenceReceipt(message, event.content, null);
