@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
+from backend.app.memory.context_budget import allocate_context_budget, estimate_tokens
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_REGISTRY = ROOT / "data" / "knowledge" / "registry.json"
@@ -154,7 +154,7 @@ def _retrieve_directory(kb: dict, query_words: set[str], query: str) -> list[dic
                 "kb": kb["id"], "name": kb["name"],
                 "path": str(path.relative_to(ROOT)), "score": score,
                 "phrase_matches": phrase_matches(query, text, kb.get("score_phrases", [])),
-                "content": text[:4000],
+                "content": text[:4000], "excerpt_shortened": len(text) > 4000,
             })
     return results
 
@@ -209,7 +209,7 @@ def retrieve_knowledge(
     return results[:max_results]
 
 
-def format_knowledge_context(results: list[dict]) -> str:
+def format_knowledge_context(results: list[dict], *, token_budget: int | None = None, selection: list[dict] | None = None) -> str:
     if not results:
         return ""
     lines = [
@@ -219,14 +219,30 @@ def format_knowledge_context(results: list[dict]) -> str:
         "Never call this material verified, observed, inspected, measured, or confirmed unless a live C.O.R.E. tool independently establishes that fact.",
         "Describe procedures and commands from this section as reference guidance, documented guidance, or a reference procedure.",
     ]
+    budget = allocate_context_budget()["knowledge"] if token_budget is None else token_budget
+    context = "\n".join(lines)
+    selected = 0
     for result in results:
         label = result.get("section") or result.get("path") or "reference"
-        lines.extend([
-            "",
-            f"[{result.get('name', result.get('kb', 'Knowledge Base'))}] {label}",
-            f"Source: {result.get('path') or 'not recorded'}; chunk: {result.get('chunk_id') or 'not applicable'}",
-            result.get("content", ""),
-        ])
-    context = "\n".join(lines)
-    budget = allocate_context_budget()["knowledge"]
-    return trim_to_token_budget(context, budget, keep="start")
+        provenance = (f"\n\n[{result.get('name', result.get('kb', 'Knowledge Base'))}] {label}\n"
+                      f"Source: {result.get('path') or 'not recorded'}; chunk: {result.get('chunk_id') or 'not applicable'}\n")
+        content = str(result.get("content") or "")
+        if not content.strip():
+            continue
+        shortened = bool(result.get("excerpt_shortened"))
+        available = budget * 4 - len(context + provenance)
+        if len(content) > available:
+            marker = " [TRUNCATED]"
+            if available <= len(marker):
+                continue
+            content = content[:available - len(marker)] + marker
+            shortened = True
+        if estimate_tokens(context + provenance + content) > budget:
+            continue
+        context += provenance + content
+        selected += 1
+        if selection is not None:
+            selection.append({key: result.get(key) for key in ("kb", "name", "path", "section", "chunk_id")} | {
+                "excerpt_shortened": shortened,
+            })
+    return context if selected else ""

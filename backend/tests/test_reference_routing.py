@@ -53,7 +53,14 @@ def test_exact_reference_prompt_reaches_model_with_kb_context(tmp_path, monkeypa
     async def no_tool(*a, **k):
         raise AssertionError("Reference prompt invoked a live service tool")
 
+    events = []
+
     def check(messages):
+        types = [e.event_type for e in events]
+        assert types.index("knowledge.context_selected") < types.index("model.request_started")
+        selected = next(e for e in events if e.event_type == "knowledge.context_selected")
+        assert selected.metadata["sources"][0]["chunk_id"] == "hybrid-1"
+        assert selected.trace_id is not None
         system = messages[0]["content"]
         assert "REFERENCE KNOWLEDGE — NOT LIVE SYSTEM EVIDENCE" in system
         assert "Hybrid search combines keyword and vector retrieval." in system
@@ -67,7 +74,7 @@ def test_exact_reference_prompt_reaches_model_with_kb_context(tmp_path, monkeypa
         yield await answer(**kwargs)
 
     async def publish(event):
-        pass
+        events.append(event)
 
     monkeypatch.setattr(agent_tools, "execute_tool", no_tool)
     monkeypatch.setattr(chat.event_bus, "publish", publish)

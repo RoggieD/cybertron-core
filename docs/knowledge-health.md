@@ -41,3 +41,29 @@ and chunk IDs alongside the existing reference-only evidence label.
 
 Reference implementation: `RoggieD/cybertron-agentic-stack`,
 `.agent/tools/kb_manage.py` (status/verify) and `.agent/tools/kb_chunk.py` (hash format).
+
+
+## Processing Graph reference provenance
+
+Reference retrieval now emits `knowledge.search_started`, `knowledge.search_completed`,
+and `knowledge.context_selected` events on the current request's session and trace.
+Both chat routes flush these events before `model.request_started`. The existing
+trace store preserves them for inspection and replay.
+
+The Knowledge retrieval panel lists triggered, enabled KBs searched and the exact
+source paths, sections, and chunk IDs packed into model context. The ranked shortlist
+count is the bounded retrieval result (currently up to three), not all matching files.
+Missing or empty KBs can produce a completed search with zero results; this is not an
+integrity or freshness check. Ordinary requests with no KB trigger emit no KB events.
+
+Packing respects the existing knowledge token allocation, keeps each selected source's
+citation intact, and marks clipped excerpts. Sources that cannot fit are omitted.
+Telemetry contains source metadata, counts, and token estimates, never document content
+or the query. The graph connects REFERENCE KNOWLEDGE to MODEL only when at least one
+source was included. The panel explicitly labels references as NOT LIVE EVIDENCE;
+prepared context is not proof that the model used a source or that a source is current.
+
+Live validation: ask “Using the Open WebUI knowledge base, explain how hybrid search
+works in RAG. Cite the source document or section, and label the answer as reference
+guidance rather than a live inspection.” Check source paths/chunk IDs in the reference
+panel, then inspect/replay the same trace. A new unrelated prompt should reset the panel.

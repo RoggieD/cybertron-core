@@ -554,3 +554,6 @@ html[data-core-theme="neon-green"] .trace-replay-panel { border-color: rgba(201,
   .episodic-recall-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .episodic-recall-records dl { grid-template-columns: 1fr; }
 }
+
+.reference-knowledge-panel { border-color: #87aaff66; }
+.reference-knowledge-panel > header strong, .reference-knowledge-panel > header span { color: #a8bfff; }

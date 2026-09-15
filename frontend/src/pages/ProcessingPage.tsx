@@ -1,3 +1,5 @@
+import { EMPTY_KNOWLEDGE, knowledgeForEvent, type KnowledgeState } from "../api/knowledge";
+import KnowledgePanel from "../components/KnowledgePanel";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_RECALL, recallForEvent, type RecallState } from "../api/episodic";
 import EpisodicRecallPanel from "../components/EpisodicRecallPanel";
@@ -25,6 +27,7 @@ type ProcessingStage =
 
 type ProvenanceState = {
   recall: RecallState;
+  knowledge: KnowledgeState;
   userInput: boolean;
   agent: string;
   memoryCount: number | null;
@@ -38,6 +41,7 @@ type ProvenanceState = {
 
 const EMPTY_PROVENANCE: ProvenanceState = {
   recall: EMPTY_RECALL,
+  knowledge: EMPTY_KNOWLEDGE,
   userInput: false,
   agent: "NONE",
   memoryCount: null,
@@ -117,6 +121,7 @@ function stageForEvent(eventType: string): ProcessingStage {
   }
   if (eventType.startsWith("agent.")) return "AGENT";
   if (eventType.startsWith("memory.")) return "MEMORY";
+  if (eventType.startsWith("knowledge.")) return "MEMORY";
   if (eventType.startsWith("episodic.")) return "MEMORY";
   if (eventType.startsWith("tool.")) return "TOOL";
   if (eventType.startsWith("model.")) {
@@ -132,6 +137,9 @@ function describeEvent(event: CoreEvent): string {
   const model = modelLabel(event);
 
   switch (event.event_type) {
+    case "knowledge.search_started": return "Searching reference knowledge";
+    case "knowledge.search_completed": return `Reference shortlist: ${numberValue(event.metadata?.matched_count) ?? 0}`;
+    case "knowledge.context_selected": return `Reference sources prepared: ${numberValue(event.metadata?.selected_count) ?? 0}`;
     case "episodic.search_started":
       return "Searching historical operational memory";
     case "episodic.search_completed":
@@ -192,7 +200,7 @@ function joinValues(values: string[], empty = "NONE"): string {
 }
 
 function provenanceForEvent(current: ProvenanceState, event: CoreEvent): ProvenanceState {
-  let next = { ...current, recall: recallForEvent(current.recall, event) };
+  let next = { ...current, recall: recallForEvent(current.recall, event), knowledge: knowledgeForEvent(current.knowledge, event) };
 
   if (event.event_type === "prompt.received") {
     next = { ...next, userInput: true };
@@ -420,6 +428,8 @@ export default function ProcessingPage() {
               tools: provenance.tools,
               episodic: provenance.recall.phase !== "not_queried",
               episodicSelected: provenance.recall.selected > 0,
+              knowledge: provenance.knowledge.phase !== "not_queried",
+              knowledgeSelected: provenance.knowledge.sources.length > 0,
             }}
           />
         </Suspense>
@@ -476,12 +486,14 @@ export default function ProcessingPage() {
             provenance.userInput ? "USER" : null,
             provenance.memoryCount !== null ? "MEMORY" : null,
             provenance.recall.selected > 0 ? "HISTORY" : null,
+            provenance.knowledge.sources.length > 0 ? "REFERENCE" : null,
             provenance.tools.length ? "TOOLS" : null,
           ].filter(Boolean).join(" + ") || "NONE"}</strong></div>
         </div>
       </section>
 
       <EpisodicRecallPanel recall={provenance.recall} />
+      <KnowledgePanel knowledge={provenance.knowledge} />
 
       <div className="processing-status-grid">
         <article><span>EVENT BUS</span><strong className={connected ? "online" : "warning"}>{connected ? "CONNECTED" : "OFFLINE"}</strong></article>

@@ -13,7 +13,8 @@ from backend.app.memory.short_term import format_conversation_context
 from backend.app.memory.episodic_retrieval import build_episodic_context
 from backend.app.memory.salience import relevance_salience_score
 from backend.app.memory.context_budget import allocate_context_budget, trim_to_token_budget
-from backend.app.knowledge.retrieval import retrieve_knowledge, format_knowledge_context
+from backend.app.knowledge.retrieval import retrieve_knowledge
+from backend.app.knowledge.telemetry import build_knowledge_context
 
 
 STOPWORDS = {
@@ -261,7 +262,7 @@ def format_memory_context(
     trace_id: str | None = None,
 ) -> str:
     conversation_context = format_conversation_context()
-    knowledge = retrieve_knowledge(message)
+    knowledge_context = build_knowledge_context(message, retriever=retrieve_knowledge, session_id=session_id, trace_id=trace_id)
     memories = retrieve_memory_context(
         message,
         session_id=session_id,
@@ -306,7 +307,6 @@ def format_memory_context(
         budget = allocate_context_budget()["persistent_memory"]
         sections.append(trim_to_token_budget(persistent_context, budget, keep="start"))
 
-    knowledge_context = format_knowledge_context(knowledge)
     if episodic_context:
         sections.append(episodic_context)
     if knowledge_context:

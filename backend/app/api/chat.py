@@ -1,3 +1,4 @@
+from backend.app.knowledge.telemetry import flush_knowledge_telemetry
 import json
 import asyncio
 from contextlib import aclosing
@@ -233,6 +234,7 @@ async def chat(request: ChatRequest) -> dict:
             tool_id, tool_result, session_id=session_id, trace_id=trace_id,
         )
         await flush_episodic_telemetry()
+        await flush_knowledge_telemetry()
         await event_bus.publish(
             CoreEvent(
                 event_type="model.request_started",
@@ -441,6 +443,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 tool_id, tool_result, session_id=session_id, trace_id=trace_id,
             )
             await flush_episodic_telemetry()
+            await flush_knowledge_telemetry()
             await publish(
                 "model.request_started",
                 actor={"type": "agent", "id": agent.id},

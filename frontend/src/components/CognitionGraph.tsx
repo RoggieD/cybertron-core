@@ -8,6 +8,7 @@ type SourceKind =
   | "policy"
   | "memory"
   | "historical"
+  | "reference"
   | "telemetry"
   | "external"
   | "generic";
@@ -28,6 +29,8 @@ type GraphEdge = {
 };
 
 export type CognitionProvenance = {
+  knowledge?: boolean;
+  knowledgeSelected?: boolean;
   episodic?: boolean;
   episodicSelected?: boolean;
   memorySources: string[];
@@ -62,6 +65,7 @@ const SOURCE_COLORS: Record<SourceKind, number> = {
   policy: 0xc77dff,
   memory: 0xffd166,
   historical: 0xff7b00,
+  reference: 0x87aaff,
   telemetry: 0x00e5ff,
   external: 0xff4fd8,
   generic: 0xa8ff9e,
@@ -154,6 +158,11 @@ function buildGraph(provenance: CognitionProvenance): {
 } {
   const nodes = [...BASE_NODES];
   const edges = [...BASE_EDGES];
+  if (provenance.knowledge) {
+    nodes.push({ id: "knowledge", label: "REFERENCE KNOWLEDGE", position: [3.4, -1.6, 0.2], provenance: true, sourceKind: "reference" });
+    edges.push({ from: "agent", to: "knowledge", provenance: true, sourceKind: "reference" });
+    if (provenance.knowledgeSelected) edges.push({ from: "knowledge", to: "model", provenance: true, sourceKind: "reference" });
+  }
   if (provenance.episodic) {
     nodes.push({ id: "episodic", label: "HISTORICAL RECALL", position: [3.4, 1.6, 0.2],
       provenance: true, sourceKind: "historical" });
@@ -204,6 +213,7 @@ function buildGraph(provenance: CognitionProvenance): {
 }
 
 function eventNode(eventType: string): NodeId | null {
+  if (eventType.startsWith("knowledge.")) return "knowledge";
   if (eventType.startsWith("episodic.")) return "episodic";
   if (eventType === "prompt.received") return "user";
   if (eventType.startsWith("router.")) return "router";
@@ -376,6 +386,11 @@ export default function CognitionGraph({
       }
     }
 
+    if (event.event_type.startsWith("knowledge.")) {
+      setObservedProvenance((current) => ({ ...current, knowledge: true,
+        knowledgeSelected: event.event_type === "knowledge.context_selected"
+          ? Number(event.metadata?.selected_count ?? 0) > 0 : current.knowledgeSelected }));
+    }
     if (event.event_type.startsWith("episodic.")) {
       setObservedProvenance((current) => ({ ...current, episodic: true,
         episodicSelected: event.event_type === "episodic.context_selected"
@@ -406,7 +421,7 @@ export default function CognitionGraph({
 
   const graph = useMemo(
     () => buildGraph(effectiveProvenance),
-    [effectiveProvenance.memorySources, effectiveProvenance.tools, effectiveProvenance.episodic, effectiveProvenance.episodicSelected],
+    [effectiveProvenance.memorySources, effectiveProvenance.tools, effectiveProvenance.episodic, effectiveProvenance.episodicSelected, effectiveProvenance.knowledge, effectiveProvenance.knowledgeSelected],
   );
 
   const graphSignature = useMemo(
@@ -711,7 +726,7 @@ export default function CognitionGraph({
   }, [graphSignature]);
 
   const provenanceCount =
-    effectiveProvenance.memorySources.length + effectiveProvenance.tools.length + (effectiveProvenance.episodicSelected ? 1 : 0);
+    effectiveProvenance.memorySources.length + effectiveProvenance.tools.length + (effectiveProvenance.episodicSelected ? 1 : 0) + (effectiveProvenance.knowledgeSelected ? 1 : 0);
 
   const legendItems: Array<[string, number]> = [
     ["USER", BASE_NODE_COLORS.user],
@@ -748,6 +763,7 @@ export default function CognitionGraph({
             {label}{activeNode === label.toLowerCase() ? " • ACTIVE" : ""}
           </span>
         ))}
+        <span style={{ color: hexCss(SOURCE_COLORS.reference), borderColor: hexCss(SOURCE_COLORS.reference) }}>REFERENCE{activeNode === "knowledge" ? " • ACTIVE" : ""}</span>
         <span style={{ color: hexCss(SOURCE_COLORS.policy), borderColor: hexCss(SOURCE_COLORS.policy) }}>
           POLICY
         </span>
