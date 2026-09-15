@@ -58,6 +58,45 @@ async def docker_inventory() -> dict:
     )
 
 
+async def docker_health_summary() -> dict:
+    inventory = await docker_inventory()
+    if not inventory.get("available"):
+        return inventory
+
+    healthy = []
+    unhealthy = []
+    running_unspecified = []
+    stopped = []
+
+    for container in inventory.get("containers", []):
+        status = str(container.get("Status", ""))
+        status_lower = status.lower()
+        item = {
+            "name": container.get("Names", "unknown"),
+            "status": status or "unknown",
+            "image": container.get("Image", "unknown"),
+        }
+
+        if status_lower.startswith("up"):
+            if "(unhealthy)" in status_lower:
+                unhealthy.append(item)
+            elif "(healthy)" in status_lower:
+                healthy.append(item)
+            else:
+                running_unspecified.append(item)
+        else:
+            stopped.append(item)
+
+    return {
+        "available": True,
+        "total": len(inventory.get("containers", [])),
+        "healthy": healthy,
+        "unhealthy": unhealthy,
+        "running_unspecified": running_unspecified,
+        "stopped": stopped,
+    }
+
+
 async def docker_inspect(container_name: str) -> dict:
     import asyncio
     import json
