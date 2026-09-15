@@ -50,3 +50,31 @@ def test_scores_are_bounded(tmp_path):
     assert episode["importance"] == 10
     assert episode["pain_score"] == 0
     assert episode["recurrence_count"] == 1
+
+
+def test_identical_operational_outcome_consolidates(tmp_path):
+    store = EpisodicStore(tmp_path / "episodes.db")
+    first = store.record(
+        prompt="Operational tool execution: docker.inventory",
+        outcome="Docker inventory completed: 14 total; 11 running.",
+        status="complete",
+        session_id="session-1",
+        trace_id="trace-1",
+        agent_id="infrastructure",
+        tool_id="docker.inventory",
+    )
+    second = store.record(
+        prompt="Operational tool execution: docker.inventory",
+        outcome="Docker inventory completed: 14 total; 11 running.",
+        status="complete",
+        session_id="session-2",
+        trace_id="trace-2",
+        agent_id="infrastructure",
+        tool_id="docker.inventory",
+    )
+
+    assert second["id"] == first["id"]
+    assert second["recurrence_count"] == 2
+    assert second["trace_id"] == "trace-2"
+    assert second["metadata"]["previous_trace_id"] == "trace-1"
+    assert len(store.recent()) == 1
