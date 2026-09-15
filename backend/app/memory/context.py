@@ -9,6 +9,7 @@ from backend.app.memory import (
     MemoryPolicy,
     MemoryStore,
 )
+from backend.app.memory.short_term import format_conversation_context
 
 
 STOPWORDS = {
@@ -248,41 +249,46 @@ def format_memory_context(
     session_id: str | None = None,
     trace_id: str | None = None,
 ) -> str:
+    conversation_context = format_conversation_context()
     memories = retrieve_memory_context(
         message,
         session_id=session_id,
         trace_id=trace_id,
     )
 
-    if not memories:
-        return ""
+    sections = []
+    if conversation_context:
+        sections.append(conversation_context)
 
-    lines = [
-        "VERIFIED PERSISTENT MEMORY — CONTEXT RETRIEVAL",
-        f"Context records retrieved: {len(memories)}",
-        (
-            "The following records were retrieved from policy-authorized "
-            "persistent memory for this conversation."
-        ),
-        (
-            "Treat them as verified stored context, not as live system "
-            "measurements."
-        ),
-        (
-            "IMPORTANT: If a separate memory.search tool invocation returns "
-            "zero matches, that means only that specific tool query found no "
-            "additional matches. It does NOT negate these retrieved context "
-            "records and does NOT mean persistent memory is empty."
-        ),
-    ]
+    if memories:
+        lines = [
+            "VERIFIED PERSISTENT MEMORY — CONTEXT RETRIEVAL",
+            f"Context records retrieved: {len(memories)}",
+            (
+                "The following records were retrieved from policy-authorized "
+                "persistent memory for this conversation."
+            ),
+            (
+                "Treat them as verified stored context, not as live system "
+                "measurements."
+            ),
+            (
+                "IMPORTANT: If a separate memory.search tool invocation returns "
+                "zero matches, that means only that specific tool query found no "
+                "additional matches. It does NOT negate these retrieved context "
+                "records and does NOT mean persistent memory is empty."
+            ),
+        ]
 
-    for memory in memories:
-        lines.append(
-            "- "
-            f"[{memory['kind']}] "
-            f"{memory['content']} "
-            f"(scope: {memory.get('scope') or 'unknown'}; "
-            f"source: {memory.get('source') or 'unknown'})"
-        )
+        for memory in memories:
+            lines.append(
+                "- "
+                f"[{memory['kind']}] "
+                f"{memory['content']} "
+                f"(scope: {memory.get('scope') or 'unknown'}; "
+                f"source: {memory.get('source') or 'unknown'})"
+            )
 
-    return "\n".join(lines)
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)
