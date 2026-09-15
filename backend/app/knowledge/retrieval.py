@@ -193,6 +193,8 @@ def format_knowledge_context(results: list[dict]) -> str:
         "REFERENCE KNOWLEDGE — NOT LIVE SYSTEM EVIDENCE",
         "Use this material as documentation/reference context only.",
         "Do not describe it as a live observation unless a verified tool independently confirms it.",
+        "Never call this material verified, observed, inspected, measured, or confirmed unless a live C.O.R.E. tool independently establishes that fact.",
+        "Describe procedures and commands from this section as reference guidance, documented guidance, or a reference procedure.",
     ]
     for result in results:
         label = result.get("section") or result.get("path") or "reference"

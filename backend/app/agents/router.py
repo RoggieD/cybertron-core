@@ -26,7 +26,6 @@ SYSTEM_KEYWORDS = {
 }
 
 SECURITY_KEYWORDS = {
-    "security",
     "secure",
     "defensive",
     "defense",
