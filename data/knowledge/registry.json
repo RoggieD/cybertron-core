@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "knowledge_bases": [
+    {
+      "id": "ollama",
+      "name": "Ollama Knowledge Base",
+      "description": "Local reference material for Ollama runtime, models, API behavior, GPU usage, context, and troubleshooting.",
+      "type": "local_directory",
+      "path": "data/knowledge/ollama",
+      "triggers": ["ollama", "local model", "11434", "ollama api", "ollama model", "ollama gpu", "ollama context"],
+      "enabled": true
+    },
+    {
+      "id": "juniper",
+      "name": "Juniper Knowledge Base",
+      "description": "Reference material for Juniper networking, configuration, troubleshooting, and operations.",
+      "type": "chunk_directory",
+      "path": "data/knowledge/juniper/chunks",
+      "triggers": ["juniper", "ssg", "junos", "firewall", "screenos"],
+      "enabled": true
+    },
+    {
+      "id": "open-webui",
+      "name": "Open WebUI Knowledge Base",
+      "description": "Reference material for Open WebUI configuration, models, RAG, memories, permissions, integrations, troubleshooting, and administration.",
+      "type": "chunk_directory",
+      "path": "data/knowledge/open-webui/chunks",
+      "triggers": ["open webui", "open-webui", "openwebui", "webui", "rag", "knowledge base", "memories"],
+      "enabled": true,
+      "score_ignore_terms": ["open", "webui", "open-webui", "openwebui"],
+      "score_phrases": ["knowledge base", "hybrid search", "web search", "document retrieval", "rag troubleshooting"],
+      "score_term_weights": {"rag": 8, "hybrid": 8, "knowledge": 4, "retrieval": 5, "embedding": 5, "embeddings": 5}
+    }
+  ]
+}
