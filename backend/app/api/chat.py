@@ -22,6 +22,7 @@ from backend.app.tools.renderers import (
     should_return_verified_only,
 )
 from backend.app.memory.context import format_memory_context
+from backend.app.tools.docker_health_renderer import render_docker_health_summary
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -165,8 +166,8 @@ async def chat(request: ChatRequest) -> dict:
         )
 
         tool_id, tool_result = await run_agent_tool(agent, request.message)
-        verified_output = render_verified_tool_result(tool_id, tool_result)
-        verified_only = should_return_verified_only(request.message, tool_id)
+        verified_output = (render_docker_health_summary(tool_result) if tool_id == "docker.health_summary" and tool_result is not None else render_verified_tool_result(tool_id, tool_result))
+        verified_only = (tool_id == "docker.health_summary" or should_return_verified_only(request.message, tool_id))
 
         if tool_id:
             await event_bus.publish(
@@ -380,8 +381,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             )
 
             tool_id, tool_result = await run_agent_tool(agent, request.message)
-            verified_output = render_verified_tool_result(tool_id, tool_result)
-            verified_only = should_return_verified_only(request.message, tool_id)
+            verified_output = (render_docker_health_summary(tool_result) if tool_id == "docker.health_summary" and tool_result is not None else render_verified_tool_result(tool_id, tool_result))
+            verified_only = (tool_id == "docker.health_summary" or should_return_verified_only(request.message, tool_id))
 
             if tool_id:
                 await publish(
