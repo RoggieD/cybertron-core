@@ -950,8 +950,11 @@ export default function DashboardPage({
           </div>
         </div>
 
+        <div className="chat-actions">
+          <button type="button" onClick={newChat} disabled={busy || voiceState === "LISTENING" || voiceState === "TRANSCRIBING"}>＋ NEW CHAT</button>
+        </div>
+
         <div className="response-panel">
-          <button type="button" onClick={newChat} disabled={busy || voiceState === "LISTENING" || voiceState === "TRANSCRIBING"}>NEW CHAT</button>
           {historySaveFailed && <p role="alert">Chat history could not be saved in this browser.</p>}
           {lastRequest && <><strong>YOU</strong><p>{lastRequest}</p><strong>C.O.R.E.</strong></>}
           {responseText ? (

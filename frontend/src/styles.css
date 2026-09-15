@@ -2175,3 +2175,29 @@ footer {
   font-size: 0.62rem;
   letter-spacing: 0.08em;
 }
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.chat-actions button {
+  padding: 9px 16px;
+  border: 1px solid rgba(83, 230, 255, 0.35);
+  color: #7ff7ff;
+  background: rgba(5, 25, 31, 0.72);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.chat-actions button:hover:not(:disabled) {
+  border-color: rgba(83, 230, 255, 0.75);
+  box-shadow: 0 0 14px rgba(83, 230, 255, 0.12);
+}
+
+.chat-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
