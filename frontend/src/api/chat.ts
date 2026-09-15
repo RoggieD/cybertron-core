@@ -18,6 +18,34 @@ export type ConversationExchange = {
   response: string;
 };
 
+const CONVERSATION_KEY = "cybertron.conversation.v1";
+const MODEL_HISTORY_LIMIT = 12;
+
+function browserConversationHistory(): ConversationExchange[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONVERSATION_KEY) || "null");
+    if (!saved) return [];
+
+    const history = Array.isArray(saved.history)
+      ? saved.history.filter(
+          (item: ConversationExchange) =>
+            item && typeof item.prompt === "string" && typeof item.response === "string",
+        )
+      : [];
+
+    if (
+      typeof saved.prompt === "string" && saved.prompt.trim() &&
+      typeof saved.response === "string" && saved.response.trim()
+    ) {
+      history.push({ prompt: saved.prompt, response: saved.response });
+    }
+
+    return history.slice(-MODEL_HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
 export async function cancelChat(token: string): Promise<string> {
   const response = await fetch("/api/chat/cancel", {
     method: "POST",
@@ -34,7 +62,6 @@ export async function streamChat(
   onEvent: (event: StreamEvent) => void,
   agentId?: string | null,
   signal?: AbortSignal,
-  history: ConversationExchange[] = [],
 ): Promise<void> {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
@@ -44,7 +71,7 @@ export async function streamChat(
     },
     body: JSON.stringify({
       message,
-      history: history.slice(-12),
+      history: browserConversationHistory(),
       agent_id: agentId && agentId !== "auto" ? agentId : null,
     })
   });
