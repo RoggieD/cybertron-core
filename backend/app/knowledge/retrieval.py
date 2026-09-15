@@ -34,7 +34,23 @@ NORMALIZE = {
 
 
 def words(text: str) -> set[str]:
-    return set(re.findall(r"[a-zA-Z0-9_.:-]+", text.lower()))
+    return {word.strip("_.:-") for word in re.findall(r"[a-zA-Z0-9_.:-]+", text.lower())}
+
+
+def retrieval_subject(query: str) -> str:
+    """Separate a KB selector and citation instructions from the search topic."""
+    topic = re.sub(r"^\s*using\s+(?:the\s+)?[^,\n]+\s+knowledge base\s*,\s*", "", query, flags=re.I)
+    return re.split(r"[.!?;]\s*(?:cite|label the answer|distinguish)\b", topic, maxsplit=1, flags=re.I)[0]
+
+
+def phrase_matches(query: str, candidate: str, phrases: list) -> int:
+    # Token boundaries avoid substring matches; underscores and punctuation
+    # allow documented setting names such as ENABLE_RAG_HYBRID_SEARCH.
+    def normalized(text: str) -> str:
+        return " " + " ".join(re.findall(r"[a-z0-9]+", text.lower())) + " "
+    query_text, candidate_text = normalized(query), normalized(candidate)
+    return sum(1 for phrase in set(map(str, phrases)) if phrase.strip()
+               and normalized(phrase) in query_text and normalized(phrase) in candidate_text)
 
 
 def normalize_word(word: str) -> str:
@@ -137,6 +153,7 @@ def _retrieve_directory(kb: dict, query_words: set[str], query: str) -> list[dic
             results.append({
                 "kb": kb["id"], "name": kb["name"],
                 "path": str(path.relative_to(ROOT)), "score": score,
+                "phrase_matches": phrase_matches(query, text, kb.get("score_phrases", [])),
                 "content": text[:4000],
             })
     return results
@@ -166,6 +183,7 @@ def _retrieve_chunks(kb: dict, query_words: set[str], query: str) -> list[dict]:
                 "kb": kb["id"], "name": kb["name"], "path": source_path,
                 "section": section, "chunk_id": record.get("chunk_id"),
                 "score": score, "content": content,
+                "phrase_matches": phrase_matches(query, section + "\n" + content, kb.get("score_phrases", [])),
             })
     return results
 
@@ -173,16 +191,21 @@ def _retrieve_chunks(kb: dict, query_words: set[str], query: str) -> list[dict]:
 def retrieve_knowledge(
     query: str, *, max_results: int = 3, registry_path: Path = DEFAULT_REGISTRY,
 ) -> list[dict]:
-    base_words = meaningful_words(query)
+    if max_results <= 0:
+        return []
+    subject = retrieval_subject(query)
+    base_words = meaningful_words(subject)
     results = []
     for kb in matching_kbs(query, registry_path=registry_path):
         ignored = {normalize_word(str(t).lower()) for t in kb.get("score_ignore_terms", [])}
         query_words = {word for word in base_words if word not in ignored}
         if kb.get("type", "local_directory") == "chunk_directory":
-            results.extend(_retrieve_chunks(kb, query_words, query))
+            results.extend(_retrieve_chunks(kb, query_words, subject))
         else:
-            results.extend(_retrieve_directory(kb, query_words, query))
-    results.sort(key=lambda item: (-item["score"], item.get("path", ""), item.get("section", "")))
+            results.extend(_retrieve_directory(kb, query_words, subject))
+    # A requested compound concept outranks unrelated matches on one word,
+    # even when that word happens to be a heavily weighted section heading.
+    results.sort(key=lambda item: (-item["phrase_matches"], -item["score"], item.get("path", ""), item.get("section", "")))
     return results[:max_results]
 
 
@@ -201,6 +224,7 @@ def format_knowledge_context(results: list[dict]) -> str:
         lines.extend([
             "",
             f"[{result.get('name', result.get('kb', 'Knowledge Base'))}] {label}",
+            f"Source: {result.get('path') or 'not recorded'}; chunk: {result.get('chunk_id') or 'not applicable'}",
             result.get("content", ""),
         ])
     context = "\n".join(lines)

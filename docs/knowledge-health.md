@@ -28,5 +28,16 @@ accuracy, upstream freshness, or any live infrastructure state. Remote freshness
 is explicitly `not_checked`. Raw document content is not included in the report.
 This initial module does not change retrieval or automatically disable sources.
 
+## Retrieval ranking
+
+Reference retrieval uses the full request to select enabled KBs, then removes
+an initial `Using the … knowledge base,` selector and trailing citation instructions
+from the ranking topic. Configured compound phrases (for example `hybrid search`)
+rank ahead of isolated-word matches, followed by existing weighted term scores.
+Phrase matching respects token order and boundaries and recognizes underscores
+in documented setting names. Sentence-ending punctuation no longer hides terms
+such as `RAG.` from their configured weights. Model context includes source paths
+and chunk IDs alongside the existing reference-only evidence label.
+
 Reference implementation: `RoggieD/cybertron-agentic-stack`,
 `.agent/tools/kb_manage.py` (status/verify) and `.agent/tools/kb_chunk.py` (hash format).
