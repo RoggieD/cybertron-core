@@ -222,6 +222,12 @@ def select_tool(
         ):
             return "service.status", {}
 
+        if re.search(
+            r"\b(unhealthy|health status|health states?|which .* healthy|which .* unhealthy)\b",
+            normalized,
+        ):
+            return "docker.health_summary", {}
+
         container_name = extract_container_name(
             message
         )
