@@ -1,3 +1,4 @@
+import { clearReferenceReceipts } from "./referenceReceipts";
 export type Exchange = { prompt: string; response: string };
 export type SavedConversation = {
   history: Exchange[];
@@ -23,6 +24,7 @@ export function restoreConversation(): SavedConversation {
 }
 
 export function saveConversation(value: SavedConversation): boolean {
+  if (!value.prompt && value.history.length === 0) clearReferenceReceipts();
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...value, history: value.history.slice(-50) }));
     return true;

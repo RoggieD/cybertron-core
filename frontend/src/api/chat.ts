@@ -1,5 +1,7 @@
+import { previousReferenceReceipt, rememberReferenceReceipt } from "./referenceReceipts";
 export interface StreamEvent {
   cancel_token?: string;
+  reference_receipt?: string | null;
   event: string;
   model?: string;
   content?: string;
@@ -63,6 +65,16 @@ export async function streamChat(
   agentId?: string | null,
   signal?: AbortSignal,
 ): Promise<void> {
+  const history = browserConversationHistory();
+  let answer = "";
+  const deliver = (event: StreamEvent) => {
+    if (event.event === "tool.result" && event.content) rememberReferenceReceipt(message, event.content, null);
+    if (event.event === "model.token") answer += event.content ?? "";
+    if (event.event === "model.request_completed" && event.done) {
+      rememberReferenceReceipt(message, answer, event.reference_receipt);
+    }
+    onEvent(event);
+  };
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     signal,
@@ -71,7 +83,8 @@ export async function streamChat(
     },
     body: JSON.stringify({
       message,
-      history: browserConversationHistory(),
+      history,
+      reference_receipt: previousReferenceReceipt(history),
       agent_id: agentId && agentId !== "auto" ? agentId : null,
     })
   });
@@ -108,11 +121,11 @@ export async function streamChat(
         continue;
       }
 
-      onEvent(JSON.parse(trimmed) as StreamEvent);
+      deliver(JSON.parse(trimmed) as StreamEvent);
     }
   }
 
   if (buffer.trim()) {
-    onEvent(JSON.parse(buffer) as StreamEvent);
+    deliver(JSON.parse(buffer) as StreamEvent);
   }
 }

@@ -246,5 +246,6 @@ def format_knowledge_context(results: list[dict], *, token_budget: int | None = 
         if selection is not None:
             selection.append({key: result.get(key) for key in ("kb", "name", "path", "section", "chunk_id")} | {
                 "excerpt_shortened": shortened,
+                "origin_trace_id": result.get("origin_trace_id"),
             })
     return context if selected else ""

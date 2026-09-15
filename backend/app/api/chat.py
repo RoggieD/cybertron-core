@@ -1,3 +1,4 @@
+from backend.app.knowledge.citations import take_receipt
 from backend.app.knowledge.telemetry import flush_knowledge_telemetry
 import json
 import asyncio
@@ -57,6 +58,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
     agent_id: str | None = None
+    reference_receipt: str | None = None
 
 
 def select_agent(request: ChatRequest) -> tuple[AgentDefinition, str]:
@@ -82,11 +84,13 @@ def build_messages(
     *,
     session_id: str | None = None,
     trace_id: str | None = None,
+    reference_receipt: str | None = None,
 ) -> list[dict]:
     memory_context = format_memory_context(
         message,
         session_id=session_id,
         trace_id=trace_id,
+        reference_receipt=reference_receipt,
     )
 
     return [
@@ -105,6 +109,8 @@ def build_messages(
                 "Only tool results supplied in THIS request may be described as live, verified, observed, inspected, measured, or confirmed system state. "
                 "If no tool result is supplied in this request, do not claim that C.O.R.E. inspected, scanned, measured, observed, or verified any current system, network, container, listener, security, or service state. "
                 "Conversation history, persistent memory, historical operational episodes, and knowledge-base material are context only and must never be presented as current live observations. "
+                "Reference citations and retained source metadata may be cited without a live tool result. "
+                "When asked for citations, report the supplied source paths and chunk IDs; do not invent them. "
                 "Never change counts, states, names, or measurements supplied "
                 "by a tool. "
                 + ("\n\n" + memory_context if memory_context else "")
@@ -232,7 +238,9 @@ async def chat(request: ChatRequest) -> dict:
         messages = build_messages(
             request.message, model, agent.name, agent.instructions,
             tool_id, tool_result, session_id=session_id, trace_id=trace_id,
+            reference_receipt=request.reference_receipt,
         )
+        reference_receipt = take_receipt()
         await flush_episodic_telemetry()
         await flush_knowledge_telemetry()
         await event_bus.publish(
@@ -297,6 +305,7 @@ async def chat(request: ChatRequest) -> dict:
         return {
             "session_id": session_id,
             "trace_id": trace_id,
+            "reference_receipt": reference_receipt,
             "provider": "ollama",
             "model": model,
             "agent": agent.id,
@@ -441,7 +450,9 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             messages = build_messages(
                 request.message, model, agent.name, agent.instructions,
                 tool_id, tool_result, session_id=session_id, trace_id=trace_id,
+                reference_receipt=request.reference_receipt,
             )
+            reference_receipt = take_receipt()
             await flush_episodic_telemetry()
             await flush_knowledge_telemetry()
             await publish(
@@ -520,6 +531,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                             "model": model,
                             "agent": agent.id,
                             "agent_name": agent.name,
+                            "reference_receipt": reference_receipt,
                             "done": True,
                             **telemetry,
                         }

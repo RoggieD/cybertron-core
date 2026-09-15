@@ -260,9 +260,10 @@ def format_memory_context(
     *,
     session_id: str | None = None,
     trace_id: str | None = None,
+    reference_receipt: str | None = None,
 ) -> str:
     conversation_context = format_conversation_context()
-    knowledge_context = build_knowledge_context(message, retriever=retrieve_knowledge, session_id=session_id, trace_id=trace_id)
+    knowledge_context = build_knowledge_context(message, retriever=retrieve_knowledge, session_id=session_id, trace_id=trace_id, reference_receipt=reference_receipt)
     memories = retrieve_memory_context(
         message,
         session_id=session_id,

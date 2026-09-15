@@ -1,3 +1,4 @@
+from backend.app.knowledge.citations import is_citation_followup
 from backend.app.services.catalog import resolve_service
 import re
 
@@ -31,7 +32,7 @@ def select_tool(
 
     # Reference questions use the knowledge context assembled for the model.
     # A service name in a documentation question is not a reachability request.
-    if is_reference_question(message):
+    if is_reference_question(message) or is_citation_followup(message):
         return None, {}
 
     memory_query = extract_memory_query(
